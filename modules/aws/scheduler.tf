@@ -137,7 +137,7 @@ resource "aws_cloudwatch_event_rule" "start_instances" {
   description         = "Start GPU instances at IST 9:30 AM (04:00 UTC)"
   schedule_expression = var.schedule_start_cron
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid events:TagResource permission requirement
 }
 
 resource "aws_cloudwatch_event_target" "start_instances" {
@@ -166,7 +166,7 @@ resource "aws_cloudwatch_event_rule" "stop_instances" {
   description         = "Stop GPU instances at Ethiopia Time 6:00 PM (15:00 UTC)"
   schedule_expression = var.schedule_stop_cron
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid events:TagResource permission requirement
 }
 
 resource "aws_cloudwatch_event_target" "stop_instances" {

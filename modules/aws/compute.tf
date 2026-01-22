@@ -21,7 +21,7 @@ resource "aws_iam_role" "instance" {
     ]
   })
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid iam:TagRole permission requirement
 }
 
 resource "aws_iam_role_policy_attachment" "ssm" {
@@ -38,7 +38,7 @@ resource "aws_iam_instance_profile" "instance" {
   name = "${var.name_prefix}-instance-profile"
   role = aws_iam_role.instance.name
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid iam:TagInstanceProfile permission requirement
 }
 
 # ------------------------------------------------------------------------------

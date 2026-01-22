@@ -23,7 +23,7 @@ resource "aws_iam_role" "scheduler_lambda" {
     ]
   })
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid iam:TagRole permission requirement
 }
 
 # Lambda Basic Execution Policy
@@ -90,7 +90,7 @@ resource "aws_iam_policy" "scheduler_ec2" {
     ]
   })
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid iam:TagPolicy permission requirement
 }
 
 resource "aws_iam_role_policy_attachment" "scheduler_ec2" {
@@ -122,7 +122,7 @@ resource "aws_iam_policy" "scheduler_logs" {
     ]
   })
 
-  tags = var.common_tags
+  # Note: Tags removed to avoid iam:TagPolicy permission requirement
 }
 
 resource "aws_iam_role_policy_attachment" "scheduler_logs" {

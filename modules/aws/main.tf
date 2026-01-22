@@ -4,8 +4,9 @@
 
 locals {
   # Deep Learning AMI (Ubuntu 22.04) - Includes NVIDIA drivers
-  # This will be fetched dynamically
-  ami_name_filter = "Deep Learning AMI GPU PyTorch * (Ubuntu 22.04) *"
+  # This will be fetched dynamically - using OSS Nvidia Driver AMI for broader compatibility
+  # Pattern matches: "Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.6.0 (Ubuntu 22.04) *"
+  ami_name_filter = "Deep Learning OSS Nvidia Driver AMI GPU PyTorch * (Ubuntu 22.04) *"
 }
 
 # ------------------------------------------------------------------------------

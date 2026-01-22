@@ -1,5 +1,23 @@
 # ==============================================================================
-# Root Variables
+# Terraform Variables - Consolidated from variables/ folder
+# ==============================================================================
+# This file consolidates all variable definitions from the modular files in
+# the variables/ folder for better organization reference:
+#   - variables/variables_common.tf      → Common/General configuration
+#   - variables/variables_aws.tf         → AWS-specific configuration
+#   - variables/variables_azure.tf       → Azure-specific configuration
+#   - variables/variables_gcp.tf         → GCP-specific configuration
+#   - variables/variables_compute.tf     → Compute/scaling configuration
+#   - variables/variables_network.tf     → Network/VPC configuration
+#   - variables/variables_scheduling.tf  → Scheduling configuration
+#   - variables/variables_loadbalancer.tf → Load balancer configuration
+# ==============================================================================
+
+
+# ==============================================================================
+# SECTION 1: Common Variables - General project configuration
+# ==============================================================================
+# Source: variables/variables_common.tf
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -74,7 +92,23 @@ variable "cloud_provider" {
 }
 
 # ------------------------------------------------------------------------------
-# AWS Credentials & Configuration
+# Tags
+# ------------------------------------------------------------------------------
+variable "additional_tags" {
+  description = "Additional tags to apply to resources"
+  type        = map(string)
+  default     = {}
+}
+
+
+# ==============================================================================
+# SECTION 2: AWS Variables - AWS-specific credentials and configuration
+# ==============================================================================
+# Source: variables/variables_aws.tf
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# AWS Credentials
 # ------------------------------------------------------------------------------
 variable "aws_account_id" {
   description = "AWS Account ID (12-digit number) or Account Alias"
@@ -128,6 +162,9 @@ variable "aws_profile" {
   default     = ""
 }
 
+# ------------------------------------------------------------------------------
+# AWS Region Configuration
+# ------------------------------------------------------------------------------
 variable "aws_region" {
   description = "AWS Region (auto-selected based on preferred_region if not explicitly set)"
   type        = string
@@ -140,7 +177,18 @@ variable "aws_availability_zones" {
   default     = []
 }
 
-# AWS Region mappings
+# ------------------------------------------------------------------------------
+# AWS Instance Configuration
+# ------------------------------------------------------------------------------
+variable "instance_type_aws" {
+  description = "AWS GPU instance type"
+  type        = string
+  default     = "g5.4xlarge"
+}
+
+# ------------------------------------------------------------------------------
+# AWS Region Mappings (Locals)
+# ------------------------------------------------------------------------------
 locals {
   # AWS region mapping based on preference
   aws_region_map = {
@@ -158,8 +206,15 @@ locals {
   computed_aws_azs    = length(var.aws_availability_zones) > 0 ? var.aws_availability_zones : local.aws_az_map[var.preferred_region]
 }
 
+
+# ==============================================================================
+# SECTION 3: Azure Variables - Azure-specific credentials and configuration
+# ==============================================================================
+# Source: variables/variables_azure.tf
+# ==============================================================================
+
 # ------------------------------------------------------------------------------
-# Azure Credentials & Configuration
+# Azure Credentials
 # Authentication Methods:
 # 1. Service Principal (Client ID + Secret) - Recommended for automation
 # 2. Managed Identity - For resources running in Azure
@@ -231,13 +286,27 @@ variable "azure_environment" {
   }
 }
 
+# ------------------------------------------------------------------------------
+# Azure Region Configuration
+# ------------------------------------------------------------------------------
 variable "azure_location" {
   description = "Azure Region/Location (auto-selected based on preferred_region if not explicitly set)"
   type        = string
   default     = ""
 }
 
-# Azure Region mappings (added to existing locals)
+# ------------------------------------------------------------------------------
+# Azure Instance Configuration
+# ------------------------------------------------------------------------------
+variable "instance_type_azure" {
+  description = "Azure GPU instance type"
+  type        = string
+  default     = "Standard_NV36ads_A10_v5"
+}
+
+# ------------------------------------------------------------------------------
+# Azure Region Mappings (Locals)
+# ------------------------------------------------------------------------------
 locals {
   azure_region_map = {
     india = "centralindia"
@@ -248,8 +317,15 @@ locals {
   computed_azure_location = var.azure_location != "" ? var.azure_location : local.azure_region_map[var.preferred_region]
 }
 
+
+# ==============================================================================
+# SECTION 4: GCP Variables - GCP-specific credentials and configuration
+# ==============================================================================
+# Source: variables/variables_gcp.tf
+# ==============================================================================
+
 # ------------------------------------------------------------------------------
-# GCP Credentials & Configuration
+# GCP Credentials
 # Authentication Methods:
 # 1. Service Account JSON file - Recommended for automation
 # 2. Service Account JSON content - For CI/CD environments
@@ -320,6 +396,9 @@ variable "gcp_use_adc" {
   default     = false
 }
 
+# ------------------------------------------------------------------------------
+# GCP Region Configuration
+# ------------------------------------------------------------------------------
 variable "gcp_region" {
   description = "GCP Region (auto-selected based on preferred_region if not explicitly set)"
   type        = string
@@ -332,71 +411,9 @@ variable "gcp_zone" {
   default     = ""
 }
 
-# GCP Region mappings (added to existing locals)
-locals {
-  gcp_region_map = {
-    india = "asia-south1"
-    us    = "us-east1"
-  }
-
-  gcp_zone_map = {
-    india = "asia-south1-a"
-    us    = "us-east1-b"
-  }
-
-  # Computed GCP region/zone
-  computed_gcp_region = var.gcp_region != "" ? var.gcp_region : local.gcp_region_map[var.preferred_region]
-  computed_gcp_zone   = var.gcp_zone != "" ? var.gcp_zone : local.gcp_zone_map[var.preferred_region]
-}
-
 # ------------------------------------------------------------------------------
-# Network Configuration
+# GCP Instance Configuration
 # ------------------------------------------------------------------------------
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.11.0/24"]
-}
-
-variable "allowed_ssh_cidrs" {
-  description = "CIDR blocks allowed for SSH access"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-variable "allowed_http_cidrs" {
-  description = "CIDR blocks allowed for HTTP/HTTPS access"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-# ------------------------------------------------------------------------------
-# Compute Configuration
-# ------------------------------------------------------------------------------
-variable "instance_type_aws" {
-  description = "AWS GPU instance type"
-  type        = string
-  default     = "g5.4xlarge"
-}
-
-variable "instance_type_azure" {
-  description = "Azure GPU instance type"
-  type        = string
-  default     = "Standard_NV36ads_A10_v5"
-}
-
 variable "machine_type_gcp" {
   description = "GCP machine type"
   type        = string
@@ -415,6 +432,35 @@ variable "gpu_count_gcp" {
   default     = 1
 }
 
+# ------------------------------------------------------------------------------
+# GCP Region Mappings (Locals)
+# ------------------------------------------------------------------------------
+locals {
+  gcp_region_map = {
+    india = "asia-south1"
+    us    = "us-east1"
+  }
+
+  gcp_zone_map = {
+    india = "asia-south1-a"
+    us    = "us-east1-b"
+  }
+
+  # Computed GCP region/zone
+  computed_gcp_region = var.gcp_region != "" ? var.gcp_region : local.gcp_region_map[var.preferred_region]
+  computed_gcp_zone   = var.gcp_zone != "" ? var.gcp_zone : local.gcp_zone_map[var.preferred_region]
+}
+
+
+# ==============================================================================
+# SECTION 5: Compute Variables - Instance and scaling configuration
+# ==============================================================================
+# Source: variables/variables_compute.tf
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Volume Configuration
+# ------------------------------------------------------------------------------
 variable "root_volume_size" {
   description = "Root volume size in GB"
   type        = number
@@ -481,6 +527,71 @@ variable "cuda_version" {
   default     = "12.4"
 }
 
+
+# ==============================================================================
+# SECTION 6: Network Variables - VPC and networking configuration
+# ==============================================================================
+# Source: variables/variables_network.tf
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# VPC Configuration
+# ------------------------------------------------------------------------------
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.10.0/24", "10.0.11.0/24"]
+}
+
+# ------------------------------------------------------------------------------
+# Access Control
+# ------------------------------------------------------------------------------
+variable "allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed for SSH access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "allowed_http_cidrs" {
+  description = "CIDR blocks allowed for HTTP/HTTPS access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+# ------------------------------------------------------------------------------
+# SSH Key Configuration
+# ------------------------------------------------------------------------------
+variable "ssh_public_key" {
+  description = "SSH public key for instance access"
+  type        = string
+  default     = ""
+}
+
+variable "key_name" {
+  description = "Name for the SSH key pair"
+  type        = string
+  default     = "gpu-infra-key"
+}
+
+
+# ==============================================================================
+# SECTION 7: Scheduling Variables - Start/Stop scheduling configuration
+# ==============================================================================
+# Source: variables/variables_scheduling.tf
+# ==============================================================================
+
 # ------------------------------------------------------------------------------
 # Scheduling Configuration
 # ------------------------------------------------------------------------------
@@ -510,6 +621,13 @@ variable "schedule_timezone" {
   default     = "UTC"
 }
 
+
+# ==============================================================================
+# SECTION 8: Load Balancer Variables - Load balancer and health check config
+# ==============================================================================
+# Source: variables/variables_loadbalancer.tf
+# ==============================================================================
+
 # ------------------------------------------------------------------------------
 # Load Balancer Configuration
 # ------------------------------------------------------------------------------
@@ -519,6 +637,15 @@ variable "enable_load_balancer" {
   default     = true
 }
 
+variable "app_port" {
+  description = "Application port"
+  type        = number
+  default     = 8080
+}
+
+# ------------------------------------------------------------------------------
+# Health Check Configuration
+# ------------------------------------------------------------------------------
 variable "health_check_path" {
   description = "Health check endpoint path"
   type        = string
@@ -553,34 +680,4 @@ variable "unhealthy_threshold" {
   description = "Number of consecutive failed health checks"
   type        = number
   default     = 3
-}
-
-variable "app_port" {
-  description = "Application port"
-  type        = number
-  default     = 8080
-}
-
-# ------------------------------------------------------------------------------
-# SSH Key Configuration
-# ------------------------------------------------------------------------------
-variable "ssh_public_key" {
-  description = "SSH public key for instance access"
-  type        = string
-  default     = ""
-}
-
-variable "key_name" {
-  description = "Name for the SSH key pair"
-  type        = string
-  default     = "gpu-infra-key"
-}
-
-# ------------------------------------------------------------------------------
-# Tags
-# ------------------------------------------------------------------------------
-variable "additional_tags" {
-  description = "Additional tags to apply to resources"
-  type        = map(string)
-  default     = {}
 }

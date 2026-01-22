@@ -1,14 +1,13 @@
 # ==============================================================================
-# Provider Configurations
+# Provider Configurations for Multi-Cloud GPU Infrastructure
+# ==============================================================================
+# This configuration supports AWS, Azure, and GCP.
+# Only the selected cloud_provider will actually be used for deployments.
+# Other providers use stub/skip configurations to avoid authentication errors.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# AWS Provider
-# Supports multiple authentication methods:
-# 1. Access Key + Secret Key (explicit credentials)
-# 2. AWS CLI Profile
-# 3. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-# 4. IAM Role (when running on AWS resources)
+# AWS Provider (Primary)
 # ------------------------------------------------------------------------------
 provider "aws" {
   region     = local.computed_aws_region
@@ -17,7 +16,6 @@ provider "aws" {
   token      = var.aws_session_token != "" ? var.aws_session_token : null
   profile    = var.aws_profile != "" ? var.aws_profile : null
 
-  # Account validation
   allowed_account_ids = var.aws_account_id != "" ? [var.aws_account_id] : null
 
   default_tags {
@@ -29,7 +27,6 @@ provider "aws" {
     }
   }
 
-  # Only configure if AWS is selected
   skip_credentials_validation = var.cloud_provider != "aws"
   skip_metadata_api_check     = var.cloud_provider != "aws"
   skip_requesting_account_id  = var.cloud_provider != "aws"
@@ -37,10 +34,8 @@ provider "aws" {
 
 # ------------------------------------------------------------------------------
 # Azure Provider
-# Supports multiple authentication methods:
-# 1. Service Principal (Client ID + Secret)
-# 2. Managed Service Identity (MSI)
-# 3. Azure CLI
+# Uses environment variables ARM_* for authentication when Azure is selected.
+# When not selected, the deploy.sh script sets up mock environment to bypass auth.
 # ------------------------------------------------------------------------------
 provider "azurerm" {
   features {
@@ -49,68 +44,62 @@ provider "azurerm" {
     }
     virtual_machine {
       delete_os_disk_on_deletion     = true
-      graceful_shutdown              = true
       skip_shutdown_and_force_delete = false
     }
   }
 
-  subscription_id = var.azure_subscription_id != "" ? var.azure_subscription_id : null
-  tenant_id       = var.azure_tenant_id != "" ? var.azure_tenant_id : null
-  client_id       = var.azure_client_id != "" ? var.azure_client_id : null
-  client_secret   = var.azure_client_secret != "" ? var.azure_client_secret : null
-
-  # Use MSI if specified
-  use_msi = var.azure_use_msi
-
-  # Use Azure CLI if specified (and no service principal credentials)
-  use_cli = var.azure_use_cli && var.azure_client_id == ""
-
-  # Environment configuration
+  # Use environment variables for all authentication
+  # The deploy.sh script sets appropriate vars based on cloud_provider
+  
   environment = var.azure_environment
 
-  skip_provider_registration = var.cloud_provider != "azure"
+  # Disable all resource provider registrations
+  resource_provider_registrations = "none"
 }
 
 # ------------------------------------------------------------------------------
-# GCP Provider
-# Supports multiple authentication methods:
-# 1. Service Account JSON file
-# 2. Service Account JSON content
-# 3. Application Default Credentials (ADC)
-# 4. Access Token
-# 5. Service Account Impersonation
+# GCP Provider (Stub when not selected)
 # ------------------------------------------------------------------------------
 locals {
-  # Determine GCP credentials source
-  gcp_credentials = (
+  gcp_credentials_content = (
     var.gcp_credentials_file != "" ? file(var.gcp_credentials_file) :
     var.gcp_credentials_json != "" ? var.gcp_credentials_json :
     null
   )
+  
+  # Use a minimal dummy credential JSON when GCP is not selected
+  gcp_stub_credentials = jsonencode({
+    "type" : "service_account",
+    "project_id" : "placeholder-project",
+    "private_key_id" : "placeholder",
+    "private_key" : "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBALRiMLAHudeSA2xnISDNQ0r9J5x8Sqr7VuK95wKPiRWRbHB4LOXC\njxzP6GN2xqSJrPyv8F2yT6P3VlK2tIHJywECAwEAAQJAYPFIW8sNJajpvIf+O4wP\nmWZQ2e7M+L6fJuJxZ6g6VZlRU9BXPnUh7vT9xP0b7YIBW6Q8WCAdO4fjH8K7NZ4J\nAQIhANqL8VNfAKf5LlfP7w2LgQB0Qp8CJPqV8sL1SgAl1jq/AiEA1CG9+6q3rRzK\n8RwBzZfz3MMSmVgH0JjVmJCKlmB+RcsCIEgNZQ7tJBh7lBzYJjz8oGd6CvvLJmg8\n+JLxZ5PIHF8hAiEAmYDHFQRlKR7VyXwJJmnJb+8F8pEhoNCrPwAnM9O0T7sCIGKB\nvfeJOxl6jj5V2fg0Nl2a7c9ecqQzP6M4FJ8qEuNX\n-----END RSA PRIVATE KEY-----\n",
+    "client_email" : "placeholder@placeholder-project.iam.gserviceaccount.com",
+    "client_id" : "000000000000000000000",
+    "auth_uri" : "https://accounts.google.com/o/oauth2/auth",
+    "token_uri" : "https://oauth2.googleapis.com/token"
+  })
 }
 
 provider "google" {
-  project     = var.gcp_project_id
-  region      = local.computed_gcp_region
-  zone        = local.computed_gcp_zone
-  credentials = local.gcp_credentials
+  project = var.cloud_provider == "gcp" ? var.gcp_project_id : "placeholder-project"
+  region  = local.computed_gcp_region
+  zone    = local.computed_gcp_zone
+  
+  # Use actual credentials for GCP, stub for others
+  credentials = var.cloud_provider == "gcp" ? local.gcp_credentials_content : local.gcp_stub_credentials
 
-  # Use access token if provided
-  access_token = var.gcp_access_token != "" ? var.gcp_access_token : null
-
-  # Service account impersonation
-  impersonate_service_account = var.gcp_impersonate_service_account != "" ? var.gcp_impersonate_service_account : null
+  access_token = var.cloud_provider == "gcp" && var.gcp_access_token != "" ? var.gcp_access_token : null
+  impersonate_service_account = var.cloud_provider == "gcp" && var.gcp_impersonate_service_account != "" ? var.gcp_impersonate_service_account : null
 }
 
 provider "google-beta" {
-  project     = var.gcp_project_id
-  region      = local.computed_gcp_region
-  zone        = local.computed_gcp_zone
-  credentials = local.gcp_credentials
+  project = var.cloud_provider == "gcp" ? var.gcp_project_id : "placeholder-project"
+  region  = local.computed_gcp_region
+  zone    = local.computed_gcp_zone
+  
+  # Use actual credentials for GCP, stub for others
+  credentials = var.cloud_provider == "gcp" ? local.gcp_credentials_content : local.gcp_stub_credentials
 
-  # Use access token if provided
-  access_token = var.gcp_access_token != "" ? var.gcp_access_token : null
-
-  # Service account impersonation
-  impersonate_service_account = var.gcp_impersonate_service_account != "" ? var.gcp_impersonate_service_account : null
+  access_token = var.cloud_provider == "gcp" && var.gcp_access_token != "" ? var.gcp_access_token : null
+  impersonate_service_account = var.cloud_provider == "gcp" && var.gcp_impersonate_service_account != "" ? var.gcp_impersonate_service_account : null
 }
