@@ -1,0 +1,325 @@
+# ==============================================================================
+# OAN-AI DPG Terraform - Git Ignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Terraform
+# ------------------------------------------------------------------------------
+# Local .terraform directories
+.terraform/
+.terraform.lock.hcl
+
+# Terraform state files (contain sensitive info)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+terraform.tfstate.d/
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Terraform variable files (may contain secrets)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Terraform plan files
+*.tfplan
+*.plan
+tfplan
+tfplan.*
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI configuration
+.terraformrc
+terraform.rc
+
+# ------------------------------------------------------------------------------
+# Credentials & Secrets
+# ------------------------------------------------------------------------------
+# AWS credentials
+.aws/
+credentials
+*.pem
+*.key
+*.cer
+*.crt
+*_rsa
+*_rsa.pub
+*_ed25519
+*_ed25519.pub
+*_ecdsa
+*_ecdsa.pub
+id_rsa*
+id_ed25519*
+id_ecdsa*
+known_hosts
+
+# Azure credentials
+.azure/
+azure.json
+azureProfile.json
+
+# GCP credentials
+*-credentials.json
+*-sa-key.json
+service-account*.json
+gcp-credentials.json
+application_default_credentials.json
+
+# Generic secrets
+*.secret
+*.secrets
+secrets/
+.secrets/
+secret.yaml
+secret.yml
+secrets.yaml
+secrets.yml
+
+# Environment files
+.env
+.env.*
+.envrc
+!.env.example
+!.env.template
+
+# ------------------------------------------------------------------------------
+# Logs & Temporary Files
+# ------------------------------------------------------------------------------
+# Deployment logs
+deploy.log
+*.log
+logs/
+log/
+
+# Backup files
+*.bak
+*.backup
+*.swp
+*.swo
+*.swn
+*~
+\#*\#
+.\#*
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+.cache/
+cache/
+
+# ------------------------------------------------------------------------------
+# Lambda Build Artifacts
+# ------------------------------------------------------------------------------
+# Python Lambda
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+venv/
+.venv/
+ENV/
+env/
+.python-version
+
+# Node.js Lambda
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.yarn/
+.pnpm-store/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Lambda deployment packages
+lambda_function.zip
+*.zip
+!templates/*.zip
+
+# ------------------------------------------------------------------------------
+# IDE & Editor
+# ------------------------------------------------------------------------------
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.swn
+Session.vim
+.netrwhist
+tags
+
+# Emacs
+*~
+\#*\#
+.\#*
+*.elc
+auto-save-list
+tramp
+
+# Other editors
+*.sublime-*
+.project
+.settings/
+.classpath
+*.launch
+
+# ------------------------------------------------------------------------------
+# OS Files
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ------------------------------------------------------------------------------
+# Build & Output
+# ------------------------------------------------------------------------------
+dist/
+build/
+out/
+output/
+target/
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ------------------------------------------------------------------------------
+# Documentation Build
+# ------------------------------------------------------------------------------
+_build/
+site/
+.docusaurus/
+.next/
+.nuxt/
+.output/
+
+# ------------------------------------------------------------------------------
+# Testing
+# ------------------------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+test-reports/
+junit.xml
+*.test
+*.spec
+
+# ------------------------------------------------------------------------------
+# Deployment State & Runtime
+# ------------------------------------------------------------------------------
+.deployment_state
+.deploy_history
+*.pid
+*.seed
+*.pid.lock
+
+# ------------------------------------------------------------------------------
+# Cloud Provider Specific
+# ------------------------------------------------------------------------------
+# AWS SAM
+.aws-sam/
+samconfig.toml
+
+# Serverless Framework
+.serverless/
+
+# Pulumi
+Pulumi.*.yaml
+!Pulumi.yaml
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# ------------------------------------------------------------------------------
+# Ansible (if used for provisioning)
+# ------------------------------------------------------------------------------
+*.retry
+inventory/
+!inventory.example
+
+# ------------------------------------------------------------------------------
+# Docker (if used locally)
+# ------------------------------------------------------------------------------
+.docker/
+docker-compose.override.yml
+

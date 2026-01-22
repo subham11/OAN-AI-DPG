@@ -1,0 +1,211 @@
+# ==============================================================================
+# Terraform Variables Example
+# ==============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+# cp terraform.tfvars.example terraform.tfvars
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# General Configuration
+# ------------------------------------------------------------------------------
+project_name = "gpu-infra"
+environment  = "dev"
+owner        = "OpenAgriNet - The Next GEN Agri Tech"
+
+# ------------------------------------------------------------------------------
+# Cloud Provider Selection
+# Options: "aws", "azure", "gcp"
+# ------------------------------------------------------------------------------
+cloud_provider = "aws"
+
+# ==============================================================================
+# AWS AUTHENTICATION
+# ==============================================================================
+# AWS requires API credentials (Access Key + Secret Key) for programmatic access.
+# These are different from your IAM console username/password.
+#
+# How to get AWS credentials:
+# 1. Login to AWS Console: https://console.aws.amazon.com/
+# 2. Go to IAM → Users → Your User → Security credentials
+# 3. Create Access Key for "Command Line Interface (CLI)"
+# 4. Save the Access Key ID and Secret Access Key
+#
+# RECOMMENDED: Use environment variables instead of storing in files:
+# export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+# export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+# ------------------------------------------------------------------------------
+
+# AWS Account Information
+# aws_account_id   = "123456789012"        # 12-digit AWS Account ID (find in top-right of AWS Console)
+# aws_iam_username = "your-iam-username"   # Your IAM username (for reference)
+
+# AWS API Credentials (choose one method):
+
+# Method 1: Direct credentials (not recommended for production)
+# aws_access_key    = "AKIAIOSFODNN7EXAMPLE"
+# aws_secret_key    = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+# aws_session_token = ""  # Only needed for temporary credentials/MFA
+
+# Method 2: AWS CLI Profile (recommended for local development)
+# aws_profile = "default"  # or your named profile
+
+# AWS Region Configuration (India primary, US fallback)
+aws_region             = "ap-south-1"      # Mumbai, India
+aws_availability_zones = ["ap-south-1a", "ap-south-1b"]
+
+# ==============================================================================
+# AZURE AUTHENTICATION  
+# ==============================================================================
+# Azure uses Service Principal for programmatic access.
+#
+# How to create a Service Principal:
+# 1. Install Azure CLI and login: az login
+# 2. Create Service Principal:
+#    az ad sp create-for-rbac --name "terraform-sp" --role Contributor \\
+#      --scopes /subscriptions/{subscription-id}
+# 3. Save the output: appId (client_id), password (client_secret), tenant
+#
+# RECOMMENDED: Use environment variables:
+# export ARM_SUBSCRIPTION_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# export ARM_TENANT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# export ARM_CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# export ARM_CLIENT_SECRET="your-client-secret"
+# ------------------------------------------------------------------------------
+
+# Azure Subscription & Tenant (find in Azure Portal → Subscriptions)
+# azure_subscription_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# azure_tenant_id       = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Azure Service Principal Credentials
+# azure_client_id       = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Application (client) ID
+# azure_client_secret   = "your-client-secret-value"              # Client secret value
+
+# Alternative Authentication Methods
+# azure_use_cli = true   # Use Azure CLI authentication (az login)
+# azure_use_msi = true   # Use Managed Service Identity (when running on Azure)
+
+# Azure Region Configuration (India primary, US fallback)
+azure_location = "centralindia"
+
+# ==============================================================================
+# GCP AUTHENTICATION
+# ==============================================================================
+# GCP uses Service Account for programmatic access.
+#
+# How to create a Service Account:
+# 1. Go to GCP Console → IAM & Admin → Service Accounts
+# 2. Create Service Account with required roles (Compute Admin, etc.)
+# 3. Create and download JSON key file
+#
+# RECOMMENDED: Use environment variable:
+# export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+# export GOOGLE_PROJECT="your-project-id"
+# ------------------------------------------------------------------------------
+
+# GCP Project Information (find in GCP Console → Project selector)
+# gcp_project_id     = "my-project-id"     # Project ID (not display name)
+# gcp_project_number = "123456789012"      # Project number (optional)
+
+# GCP Service Account Email (optional, for reference)
+# gcp_service_account_email = "terraform@my-project-id.iam.gserviceaccount.com"
+
+# GCP Credentials (choose one method):
+
+# Method 1: Service Account JSON file path
+# gcp_credentials_file = "/path/to/service-account.json"
+
+# Method 2: Service Account JSON content (for CI/CD - store as secret)
+# gcp_credentials_json = <<EOF
+# {
+#   "type": "service_account",
+#   "project_id": "my-project-id",
+#   ...
+# }
+# EOF
+
+# Method 3: Application Default Credentials (recommended for local development)
+# gcp_use_adc = true  # Requires: gcloud auth application-default login
+
+# Method 4: Service Account Impersonation
+# gcp_impersonate_service_account = "terraform@my-project-id.iam.gserviceaccount.com"
+
+# GCP Region Configuration (India primary, US fallback)
+gcp_region = "asia-south1"     # Mumbai, India
+gcp_zone   = "asia-south1-a"
+
+# ------------------------------------------------------------------------------
+# Network Configuration
+# ------------------------------------------------------------------------------
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+allowed_ssh_cidrs    = ["0.0.0.0/0"]    # Restrict in production!
+allowed_http_cidrs   = ["0.0.0.0/0"]
+
+# ------------------------------------------------------------------------------
+# Compute Configuration
+# ------------------------------------------------------------------------------
+# AWS: g5.4xlarge (NVIDIA A10G)
+# Azure: Standard_NV36ads_A10_v5 (NVIDIA A10)
+# GCP: n1-standard-16 with L4 GPU
+instance_type_aws   = "g5.4xlarge"
+instance_type_azure = "Standard_NV36ads_A10_v5"
+machine_type_gcp    = "n1-standard-16"
+gpu_type_gcp        = "nvidia-l4"
+gpu_count_gcp       = 1
+
+root_volume_size = 100
+root_volume_type = "gp3"
+
+# ------------------------------------------------------------------------------
+# Auto-Scaling Configuration
+# ------------------------------------------------------------------------------
+asg_min_size              = 1
+asg_max_size              = 1    # Increase after testing
+asg_desired_capacity      = 1
+scale_up_cpu_threshold    = 80
+scale_down_cpu_threshold  = 20
+health_check_grace_period = 300
+
+# ------------------------------------------------------------------------------
+# NVIDIA Configuration
+# ------------------------------------------------------------------------------
+nvidia_driver_version = "550"
+cuda_version          = "12.4"
+
+# ------------------------------------------------------------------------------
+# Scheduling Configuration
+# IST 9:30 AM = UTC 04:00
+# Ethiopia Time 6:00 PM = UTC 15:00
+# ------------------------------------------------------------------------------
+enable_scheduling   = true
+schedule_start_cron = "cron(0 4 ? * MON-FRI *)"
+schedule_stop_cron  = "cron(0 15 ? * MON-FRI *)"
+schedule_timezone   = "UTC"
+
+# ------------------------------------------------------------------------------
+# Load Balancer Configuration
+# ------------------------------------------------------------------------------
+enable_load_balancer  = true
+health_check_path     = "/health"
+health_check_port     = 8080
+health_check_interval = 30
+health_check_timeout  = 10
+healthy_threshold     = 2
+unhealthy_threshold   = 3
+app_port              = 8080
+
+# ------------------------------------------------------------------------------
+# SSH Key Configuration
+# Generate with: ssh-keygen -t rsa -b 4096 -f gpu-infra-key
+# ------------------------------------------------------------------------------
+key_name       = "gpu-infra-key"
+ssh_public_key = ""  # Paste your public key here
+
+# ------------------------------------------------------------------------------
+# Additional Tags
+# ------------------------------------------------------------------------------
+additional_tags = {
+  CostCenter = "Engineering"
+  Team       = "DevOps"
+}
