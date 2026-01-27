@@ -24,10 +24,10 @@ rollback_on_failure() {
     
     # Run terraform destroy to clean up any created resources
     if terraform destroy -input=false -auto-approve 2>&1 | tee -a "$LOG_FILE"; then
-        log "SUCCESS" "Rollback completed - all resources cleaned up"
+        log "SUCCESS" "Terraform rollback completed"
         save_state "rolled_back"
     else
-        log "ERROR" "Rollback failed - some resources may remain"
+        log "ERROR" "Terraform rollback failed - some resources may remain"
         echo ""
         echo -e "${RED}WARNING: Automatic rollback failed!${NC}"
         echo "Please manually clean up resources using:"
@@ -36,6 +36,9 @@ rollback_on_failure() {
         save_state "rollback_failed"
     fi
     
+    # Clean up orphaned IAM resources that Terraform may miss
+    _cleanup_orphaned_iam_resources
+    
     # Clean build artifacts
     rm -f tfplan 2>/dev/null
     
@@ -43,6 +46,151 @@ rollback_on_failure() {
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
     echo -e "${YELLOW}  ROLLBACK COMPLETE${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+}
+
+# ==============================================================================
+# Cleanup Orphaned IAM Resources
+# ==============================================================================
+# Terraform destroy may not clean up IAM resources if there are dependency
+# issues or if the resources were created but the apply failed mid-way.
+# This function ensures complete cleanup of project-related IAM resources.
+# ==============================================================================
+
+_cleanup_orphaned_iam_resources() {
+    local project_prefix="${PROJECT_NAME:-dpg-infra}-${ENVIRONMENT:-staging}"
+    
+    log "INFO" "Checking for orphaned IAM resources with prefix: $project_prefix"
+    
+    case "$PLATFORM" in
+        aws)
+            _cleanup_aws_iam_resources "$project_prefix"
+            ;;
+        azure)
+            # Azure uses managed identities which are cleaned up with resource groups
+            log "INFO" "Azure managed identities are cleaned up with resource groups"
+            ;;
+        gcp)
+            _cleanup_gcp_iam_resources "$project_prefix"
+            ;;
+    esac
+}
+
+_cleanup_aws_iam_resources() {
+    local prefix="$1"
+    local orphaned_found=false
+    
+    # Check and clean up instance profiles
+    local instance_profiles
+    instance_profiles=$(aws iam list-instance-profiles \
+        --query "InstanceProfiles[?contains(InstanceProfileName, \`$prefix\`)].InstanceProfileName" \
+        --output text 2>/dev/null || echo "")
+    
+    for profile in $instance_profiles; do
+        orphaned_found=true
+        log "INFO" "Cleaning up orphaned instance profile: $profile"
+        
+        # Get roles attached to the instance profile
+        local roles
+        roles=$(aws iam get-instance-profile --instance-profile-name "$profile" \
+            --query 'InstanceProfile.Roles[*].RoleName' --output text 2>/dev/null || echo "")
+        
+        for role in $roles; do
+            aws iam remove-role-from-instance-profile \
+                --instance-profile-name "$profile" \
+                --role-name "$role" 2>/dev/null || true
+        done
+        
+        aws iam delete-instance-profile --instance-profile-name "$profile" 2>/dev/null && \
+            log "SUCCESS" "Deleted instance profile: $profile" || \
+            log "WARN" "Could not delete instance profile: $profile"
+    done
+    
+    # Check and clean up IAM roles
+    local roles
+    roles=$(aws iam list-roles \
+        --query "Roles[?contains(RoleName, \`$prefix\`)].RoleName" \
+        --output text 2>/dev/null || echo "")
+    
+    for role in $roles; do
+        orphaned_found=true
+        log "INFO" "Cleaning up orphaned IAM role: $role"
+        
+        # Detach all managed policies
+        local attached_policies
+        attached_policies=$(aws iam list-attached-role-policies --role-name "$role" \
+            --query 'AttachedPolicies[*].PolicyArn' --output text 2>/dev/null || echo "")
+        
+        for policy_arn in $attached_policies; do
+            aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null || true
+        done
+        
+        # Delete all inline policies
+        local inline_policies
+        inline_policies=$(aws iam list-role-policies --role-name "$role" \
+            --query 'PolicyNames' --output text 2>/dev/null || echo "")
+        
+        for policy_name in $inline_policies; do
+            aws iam delete-role-policy --role-name "$role" --policy-name "$policy_name" 2>/dev/null || true
+        done
+        
+        aws iam delete-role --role-name "$role" 2>/dev/null && \
+            log "SUCCESS" "Deleted IAM role: $role" || \
+            log "WARN" "Could not delete IAM role: $role"
+    done
+    
+    # Check and clean up custom IAM policies
+    local policies
+    policies=$(aws iam list-policies --scope Local \
+        --query "Policies[?contains(PolicyName, \`$prefix\`)].[PolicyArn,PolicyName]" \
+        --output text 2>/dev/null || echo "")
+    
+    while read -r policy_arn policy_name; do
+        if [[ -n "$policy_arn" ]] && [[ "$policy_arn" != "None" ]]; then
+            orphaned_found=true
+            log "INFO" "Cleaning up orphaned IAM policy: $policy_name"
+            
+            # Delete all non-default policy versions first
+            local versions
+            versions=$(aws iam list-policy-versions --policy-arn "$policy_arn" \
+                --query 'Versions[?IsDefaultVersion==`false`].VersionId' --output text 2>/dev/null || echo "")
+            
+            for version in $versions; do
+                aws iam delete-policy-version --policy-arn "$policy_arn" --version-id "$version" 2>/dev/null || true
+            done
+            
+            aws iam delete-policy --policy-arn "$policy_arn" 2>/dev/null && \
+                log "SUCCESS" "Deleted IAM policy: $policy_name" || \
+                log "WARN" "Could not delete IAM policy: $policy_name"
+        fi
+    done <<< "$policies"
+    
+    if [[ "$orphaned_found" == "true" ]]; then
+        log "SUCCESS" "Orphaned IAM resources cleanup completed"
+    else
+        log "INFO" "No orphaned IAM resources found"
+    fi
+}
+
+_cleanup_gcp_iam_resources() {
+    local prefix="$1"
+    
+    # GCP service accounts cleanup
+    local project_id
+    project_id=$(gcloud config get-value project 2>/dev/null || echo "")
+    
+    if [[ -n "$project_id" ]]; then
+        local service_accounts
+        service_accounts=$(gcloud iam service-accounts list \
+            --filter="displayName~$prefix OR email~$prefix" \
+            --format="value(email)" 2>/dev/null || echo "")
+        
+        for sa in $service_accounts; do
+            log "INFO" "Cleaning up orphaned service account: $sa"
+            gcloud iam service-accounts delete "$sa" --quiet 2>/dev/null && \
+                log "SUCCESS" "Deleted service account: $sa" || \
+                log "WARN" "Could not delete service account: $sa"
+        done
+    fi
 }
 
 # ==============================================================================
