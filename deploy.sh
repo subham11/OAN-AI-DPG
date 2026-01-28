@@ -91,6 +91,9 @@ run_interactive_deployment() {
     # Step 5: Template selection
     select_template
     
+    # Step 5.5: Instance pricing type (Spot vs On-Demand) - AWS only
+    select_instance_pricing
+    
     # Step 6: Configure credentials
     configure_credentials "$PLATFORM"
     

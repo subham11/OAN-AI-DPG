@@ -47,14 +47,7 @@ provider "aws" {
   # Account validation
   allowed_account_ids = var.aws_account_id != "" ? [var.aws_account_id] : null
 
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Owner       = var.owner
-    }
-  }
+  # Note: default_tags removed to avoid iam:TagRole permission requirement
 }
 
 # ------------------------------------------------------------------------------
@@ -63,16 +56,8 @@ provider "aws" {
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
 
-  common_tags = merge(
-    {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Owner       = var.owner
-      GPUEnabled  = "true"
-    },
-    var.additional_tags
-  )
+  # Note: Tags disabled to avoid iam:TagRole/TagPolicy permission requirement
+  common_tags = {}
 }
 
 # ------------------------------------------------------------------------------
@@ -96,11 +81,13 @@ module "gpu_infrastructure" {
   allowed_http_cidrs   = var.allowed_http_cidrs
 
   # Compute
-  instance_type    = var.instance_type
-  root_volume_size = var.root_volume_size
-  root_volume_type = var.root_volume_type
-  key_name         = var.key_name
-  ssh_public_key   = var.ssh_public_key
+  instance_type      = var.instance_type
+  use_spot_instances = var.use_spot_instances
+  spot_max_price     = var.spot_max_price
+  root_volume_size   = var.root_volume_size
+  root_volume_type   = var.root_volume_type
+  key_name           = var.key_name
+  ssh_public_key     = var.ssh_public_key
 
   # Auto-Scaling
   asg_min_size              = var.asg_min_size

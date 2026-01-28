@@ -305,3 +305,245 @@ configure_custom_instance() {
     read -p "Enter storage size in GB [100]: " VOLUME_SIZE
     VOLUME_SIZE=${VOLUME_SIZE:-100}
 }
+
+# ==============================================================================
+# Instance Pricing Type Selection (Spot vs On-Demand)
+# ==============================================================================
+
+select_instance_pricing() {
+    # Only applicable for AWS currently
+    if [[ "$PLATFORM" != "aws" ]]; then
+        USE_SPOT_INSTANCES="false"
+        return
+    fi
+    
+    echo ""
+    log "STEP" "Select instance pricing type"
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}  💰 Instance Pricing Options${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${GREEN}1)${NC} ${CYAN}On-Demand${NC} - Pay full price, guaranteed availability"
+    echo -e "     └─ Best for: Production workloads, predictable availability"
+    echo ""
+    echo -e "  ${GREEN}2)${NC} ${CYAN}Spot Instances${NC} - Up to 90% savings, may be interrupted"
+    echo -e "     └─ Best for: Development, testing, fault-tolerant workloads"
+    echo -e "     └─ ${YELLOW}Note: Instances may be terminated with 2-min warning${NC}"
+    echo ""
+    
+    while true; do
+        read -p "Enter your choice (1-2) [1]: " choice
+        choice=${choice:-1}
+        case "$choice" in
+            1) 
+                USE_SPOT_INSTANCES="false"
+                log "SUCCESS" "Selected: On-Demand instances"
+                break 
+                ;;
+            2) 
+                USE_SPOT_INSTANCES="true"
+                log "SUCCESS" "Selected: Spot instances (cost savings enabled)"
+                # Run spot capacity check
+                if ! check_spot_capacity; then
+                    log "WARN" "Spot capacity check indicated potential issues"
+                fi
+                break 
+                ;;
+            *) echo -e "${RED}Invalid choice. Please enter 1 or 2.${NC}" ;;
+        esac
+    done
+}
+
+# ==============================================================================
+# Spot Instance Capacity Check
+# ==============================================================================
+# Checks AWS Spot capacity for the selected instance type and availability
+# zones, and warns the user if capacity may not be available.
+# ==============================================================================
+
+check_spot_capacity() {
+    local instance_type="${INSTANCE_TYPE:-g5.4xlarge}"
+    local region="${REGION:-us-east-1}"
+    
+    # Get the configured availability zones (default to a/b suffixes)
+    local az1="${region}a"
+    local az2="${region}b"
+    local selected_azs="${az1},${az2}"
+    
+    echo ""
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}  Spot Instance Capacity Check${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    log "INFO" "Instance Type: ${BOLD}$instance_type${NC}"
+    log "INFO" "Region: ${BOLD}$region${NC}"
+    log "INFO" "Selected AZs: ${BOLD}$az1, $az2${NC}"
+    echo ""
+    log "INFO" "Checking Spot capacity availability..."
+    echo ""
+    
+    # Arrays to track results
+    local available_azs=()
+    local unavailable_azs=()
+    local az_with_prices=()
+    
+    # Get all AZs in the region
+    local all_azs
+    all_azs=$(aws ec2 describe-availability-zones \
+        --region "$region" \
+        --filters "Name=state,Values=available" \
+        --query 'AvailabilityZones[*].ZoneName' \
+        --output text 2>/dev/null | tr '\t' '\n' | sort)
+    
+    if [[ -z "$all_azs" ]]; then
+        log "WARN" "Could not retrieve availability zones"
+        return 0
+    fi
+    
+    # Check each AZ for spot pricing (indicates availability)
+    for az in $all_azs; do
+        printf "  Checking %-15s ... " "$az"
+        
+        local price
+        price=$(aws ec2 describe-spot-price-history \
+            --region "$region" \
+            --instance-types "$instance_type" \
+            --availability-zone "$az" \
+            --product-descriptions "Linux/UNIX" \
+            --start-time "$(date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')" \
+            --query 'SpotPriceHistory[0].SpotPrice' \
+            --output text 2>/dev/null)
+        
+        if [[ -n "$price" && "$price" != "None" && "$price" != "null" ]]; then
+            echo -e "${GREEN}Available${NC} (Spot price: \$${price}/hr)"
+            available_azs+=("$az")
+            az_with_prices+=("$az:\$${price}/hr")
+        else
+            echo -e "${YELLOW}Limited/Unavailable${NC}"
+            unavailable_azs+=("$az")
+        fi
+    done
+    
+    echo ""
+    
+    # Check if selected AZs have capacity issues
+    local selected_with_issues=()
+    local selected_ok=()
+    
+    for selected_az in "$az1" "$az2"; do
+        local found_unavailable=false
+        for unavail_az in "${unavailable_azs[@]}"; do
+            if [[ "$selected_az" == "$unavail_az" ]]; then
+                selected_with_issues+=("$selected_az")
+                found_unavailable=true
+                break
+            fi
+        done
+        if [[ "$found_unavailable" == "false" ]]; then
+            selected_ok+=("$selected_az")
+        fi
+    done
+    
+    # Report results
+    if [[ ${#selected_with_issues[@]} -gt 0 ]]; then
+        echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}${BOLD}  ⚠ SPOT CAPACITY WARNING${NC}"
+        echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "  The ${BOLD}$instance_type${NC} Spot capacity is ${RED}not available${NC} in:"
+        for issue_az in "${selected_with_issues[@]}"; do
+            echo -e "    ${RED}•${NC} $issue_az"
+        done
+        echo ""
+        echo -e "  The ASG is configured to use: ${BOLD}$az1${NC} and ${BOLD}$az2${NC}"
+        echo ""
+        
+        # Find alternative AZs
+        local alternative_azs=()
+        for avail_az in "${available_azs[@]}"; do
+            if [[ "$avail_az" != "$az1" && "$avail_az" != "$az2" ]]; then
+                alternative_azs+=("$avail_az")
+            fi
+        done
+        
+        if [[ ${#alternative_azs[@]} -gt 0 ]]; then
+            echo -e "  ${GREEN}${BOLD}Recommended Alternatives:${NC}"
+            echo -e "  According to current Spot pricing, capacity is available in:"
+            for alt_az in "${alternative_azs[@]}"; do
+                # Find price for this AZ
+                local az_price=""
+                for price_entry in "${az_with_prices[@]}"; do
+                    if [[ "$price_entry" == "$alt_az:"* ]]; then
+                        az_price="${price_entry#*:}"
+                        break
+                    fi
+                done
+                if [[ -n "$az_price" ]]; then
+                    echo -e "    ${GREEN}•${NC} $alt_az (Spot: ${az_price})"
+                else
+                    echo -e "    ${GREEN}•${NC} $alt_az"
+                fi
+            done
+            echo ""
+            
+            # Suggest first two available alternatives
+            local suggested_az1="${alternative_azs[0]:-}"
+            local suggested_az2="${alternative_azs[1]:-$suggested_az1}"
+            
+            echo -e "  ${BOLD}To use recommended AZs, update your terraform.tfvars:${NC}"
+            echo -e "    ${CYAN}availability_zones = [\"$suggested_az1\", \"$suggested_az2\"]${NC}"
+            echo ""
+        fi
+        
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        
+        # Prompt user for action
+        echo -e "${BOLD}Options:${NC}"
+        echo -e "  ${GREEN}1)${NC} Continue anyway (instances may fail to launch)"
+        echo -e "  ${GREEN}2)${NC} Cancel and update availability zones manually"
+        
+        if [[ ${#alternative_azs[@]} -ge 2 ]]; then
+            echo -e "  ${GREEN}3)${NC} Auto-update to use ${alternative_azs[0]} and ${alternative_azs[1]}"
+        fi
+        echo ""
+        
+        local max_choice=2
+        [[ ${#alternative_azs[@]} -ge 2 ]] && max_choice=3
+        
+        while true; do
+            read -p "Enter your choice (1-$max_choice): " capacity_choice
+            case "$capacity_choice" in
+                1)
+                    log "WARN" "Continuing with current AZs - Spot instances may fail to launch"
+                    return 0
+                    ;;
+                2)
+                    log "INFO" "Deployment cancelled. Please update availability_zones in terraform.tfvars"
+                    exit 1
+                    ;;
+                3)
+                    if [[ $max_choice -ge 3 ]]; then
+                        log "INFO" "Auto-updating availability zones to ${alternative_azs[0]} and ${alternative_azs[1]}"
+                        # Store for later use in config generation
+                        AVAILABILITY_ZONES="${alternative_azs[0]},${alternative_azs[1]}"
+                        AZ1="${alternative_azs[0]}"
+                        AZ2="${alternative_azs[1]}"
+                        log "SUCCESS" "Availability zones updated"
+                        return 0
+                    else
+                        echo -e "${RED}Invalid choice.${NC}"
+                    fi
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Please enter 1-$max_choice.${NC}"
+                    ;;
+            esac
+        done
+    else
+        log "SUCCESS" "Spot capacity is available in selected AZs!"
+        return 0
+    fi
+}

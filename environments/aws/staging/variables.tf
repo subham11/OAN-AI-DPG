@@ -119,6 +119,18 @@ variable "instance_type" {
   default     = "g4dn.xlarge"
 }
 
+variable "use_spot_instances" {
+  description = "Use Spot instances instead of On-Demand (cost savings but may be interrupted)"
+  type        = bool
+  default     = false
+}
+
+variable "spot_max_price" {
+  description = "Maximum price for Spot instances (empty string means on-demand price cap)"
+  type        = string
+  default     = ""
+}
+
 variable "root_volume_size" {
   description = "Size of root volume in GB"
   type        = number

@@ -43,11 +43,13 @@ module "aws" {
   allowed_http_cidrs   = var.allowed_http_cidrs
 
   # Compute
-  instance_type    = var.instance_type_aws
-  root_volume_size = var.root_volume_size
-  root_volume_type = var.root_volume_type
-  key_name         = var.key_name
-  ssh_public_key   = var.ssh_public_key
+  instance_type      = var.instance_type_aws
+  use_spot_instances = var.use_spot_instances
+  spot_max_price     = var.spot_max_price
+  root_volume_size   = var.root_volume_size
+  root_volume_type   = var.root_volume_type
+  key_name           = var.key_name
+  ssh_public_key     = var.ssh_public_key
 
   # Auto-Scaling
   asg_min_size              = var.asg_min_size

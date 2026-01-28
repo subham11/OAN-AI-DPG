@@ -217,6 +217,11 @@ verify_compute_instances() {
                         --auto-scaling-group-names "$asg_name" \
                         --query 'AutoScalingGroups[0].Instances | length(@)' \
                         --output text 2>/dev/null || echo "0")
+                    
+                    # If no instances, check for capacity issues
+                    if [[ "$instance_count" == "0" || -z "$instance_count" ]]; then
+                        check_asg_scaling_failures "$asg_name"
+                    fi
                 fi
             fi
             ;;
@@ -234,6 +239,151 @@ verify_compute_instances() {
     else
         log "WARN" "No compute instances detected - checking if creation failed..."
         return 1
+    fi
+}
+
+# ==============================================================================
+# Check ASG Scaling Failures (AWS-specific)
+# ==============================================================================
+# This function checks Auto Scaling Group scaling activities for failures,
+# particularly Spot capacity issues, and provides helpful suggestions.
+# ==============================================================================
+
+check_asg_scaling_failures() {
+    local asg_name="$1"
+    local region="${REGION:-us-east-1}"
+    
+    log "INFO" "Checking Auto Scaling Group scaling activities..."
+    
+    # Get recent scaling activities
+    local activities
+    activities=$(aws autoscaling describe-scaling-activities \
+        --auto-scaling-group-name "$asg_name" \
+        --max-records 5 \
+        --region "$region" \
+        --query 'Activities[*].[StatusCode,StatusMessage,Cause]' \
+        --output json 2>/dev/null)
+    
+    if [[ -z "$activities" || "$activities" == "[]" ]]; then
+        return 0
+    fi
+    
+    # Check for capacity-related failures
+    local has_capacity_failure=false
+    local failed_azs=()
+    local suggested_azs=()
+    
+    # Parse activities for capacity failures
+    while read -r status_code status_msg cause; do
+        if [[ "$status_code" == "\"Failed\"" ]]; then
+            # Check for spot capacity messages
+            if echo "$status_msg" | grep -qi "insufficient.*capacity\|capacity.*unavailable"; then
+                has_capacity_failure=true
+                
+                # Extract AZs mentioned in the message
+                local az_pattern="$region[a-z]"
+                local mentioned_azs=$(echo "$status_msg" | grep -oE "$az_pattern" | sort -u)
+                
+                for az in $mentioned_azs; do
+                    if echo "$status_msg" | grep -q "do not have.*capacity.*$az\|$az.*insufficient"; then
+                        failed_azs+=("$az")
+                    elif echo "$status_msg" | grep -q "choosing $az\|available.*$az"; then
+                        suggested_azs+=("$az")
+                    fi
+                done
+            fi
+        fi
+    done < <(echo "$activities" | jq -r '.[] | "\(.[0]) \(.[1]) \(.[2])"')
+    
+    # If we detected capacity failures, show a helpful message
+    if [[ "$has_capacity_failure" == "true" ]]; then
+        echo ""
+        echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}${BOLD}  ⚠ SPOT INSTANCE CAPACITY ISSUE DETECTED${NC}"
+        echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        
+        # Get instance type from terraform output
+        local instance_type
+        instance_type=$(terraform output -raw instance_type 2>/dev/null || echo "g5.4xlarge")
+        
+        # Remove duplicates from arrays
+        failed_azs=($(printf '%s\n' "${failed_azs[@]}" | sort -u))
+        suggested_azs=($(printf '%s\n' "${suggested_azs[@]}" | sort -u))
+        
+        # Remove failed AZs from suggested
+        local clean_suggested=()
+        for saz in "${suggested_azs[@]}"; do
+            local is_failed=false
+            for faz in "${failed_azs[@]}"; do
+                if [[ "$saz" == "$faz" ]]; then
+                    is_failed=true
+                    break
+                fi
+            done
+            if [[ "$is_failed" == "false" ]]; then
+                clean_suggested+=("$saz")
+            fi
+        done
+        suggested_azs=("${clean_suggested[@]}")
+        
+        if [[ ${#failed_azs[@]} -gt 0 ]]; then
+            echo -e "  The ${BOLD}$instance_type${NC} Spot capacity is ${RED}not available${NC} in:"
+            for az in "${failed_azs[@]}"; do
+                echo -e "    ${RED}•${NC} $az"
+            done
+            echo ""
+            echo -e "  The ASG is only configured to use those availability zones."
+            echo ""
+        fi
+        
+        if [[ ${#suggested_azs[@]} -gt 0 ]]; then
+            echo -e "  ${GREEN}${BOLD}Capacity is available in:${NC}"
+            for az in "${suggested_azs[@]}"; do
+                echo -e "    ${GREEN}•${NC} $az"
+            done
+            echo ""
+            
+            # Suggest fix
+            local new_az1="${suggested_azs[0]:-}"
+            local new_az2="${suggested_azs[1]:-$new_az1}"
+            
+            echo -e "  ${BOLD}To fix this, update your terraform.tfvars:${NC}"
+            echo -e "    ${CYAN}availability_zones = [\"$new_az1\", \"$new_az2\"]${NC}"
+            echo ""
+            echo -e "  Then run: ${CYAN}terraform apply${NC}"
+        else
+            # Query for AZs with spot capacity
+            echo -e "  Checking for AZs with available capacity..."
+            echo ""
+            
+            local available_azs
+            available_azs=$(aws ec2 describe-spot-price-history \
+                --region "$region" \
+                --instance-types "$instance_type" \
+                --product-descriptions "Linux/UNIX" \
+                --start-time "$(date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')" \
+                --query 'SpotPriceHistory[*].AvailabilityZone' \
+                --output text 2>/dev/null | tr '\t' '\n' | sort -u)
+            
+            if [[ -n "$available_azs" ]]; then
+                echo -e "  ${GREEN}${BOLD}AZs with Spot capacity based on recent pricing:${NC}"
+                for az in $available_azs; do
+                    echo -e "    ${GREEN}•${NC} $az"
+                done
+                echo ""
+                
+                local first_two=$(echo "$available_azs" | head -2 | tr '\n' ' ')
+                local az_arr=($first_two)
+                
+                echo -e "  ${BOLD}Suggested fix - update terraform.tfvars:${NC}"
+                echo -e "    ${CYAN}availability_zones = [\"${az_arr[0]}\", \"${az_arr[1]:-${az_arr[0]}}\"]${NC}"
+                echo ""
+            fi
+        fi
+        
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
     fi
 }
 

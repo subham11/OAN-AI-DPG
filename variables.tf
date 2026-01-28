@@ -186,6 +186,18 @@ variable "instance_type_aws" {
   default     = "g5.4xlarge"
 }
 
+variable "use_spot_instances" {
+  description = "Use Spot instances instead of On-Demand (cost savings but may be interrupted)"
+  type        = bool
+  default     = false
+}
+
+variable "spot_max_price" {
+  description = "Maximum price for Spot instances (empty string means on-demand price cap)"
+  type        = string
+  default     = ""
+}
+
 # ------------------------------------------------------------------------------
 # AWS Region Mappings (Locals)
 # ------------------------------------------------------------------------------

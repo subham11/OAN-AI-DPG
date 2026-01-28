@@ -66,6 +66,18 @@ variable "instance_type" {
   type        = string
 }
 
+variable "use_spot_instances" {
+  description = "Use Spot instances instead of On-Demand"
+  type        = bool
+  default     = false
+}
+
+variable "spot_max_price" {
+  description = "Maximum price for Spot instances (empty string means on-demand price cap)"
+  type        = string
+  default     = ""
+}
+
 variable "root_volume_size" {
   description = "Root volume size in GB"
   type        = number

@@ -62,11 +62,16 @@ EOF
 # ==============================================================================
 
 _generate_aws_config() {
+    # Use auto-updated AZs if available (from spot capacity check), otherwise default
+    local az1="${AZ1:-${REGION:-ap-south-1}a}"
+    local az2="${AZ2:-${REGION:-ap-south-1}b}"
+    
     cat >> "$CONFIG_FILE" << EOF
 # AWS Configuration
 aws_region         = "${REGION:-ap-south-1}"
-availability_zones = ["${REGION:-ap-south-1}a", "${REGION:-ap-south-1}b"]
+availability_zones = ["${az1}", "${az2}"]
 instance_type      = "${INSTANCE_TYPE:-g4dn.xlarge}"
+use_spot_instances = ${USE_SPOT_INSTANCES:-false}
 root_volume_size   = ${VOLUME_SIZE:-100}
 EOF
 }

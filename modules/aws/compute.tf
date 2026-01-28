@@ -57,6 +57,20 @@ resource "aws_launch_template" "gpu" {
     arn = aws_iam_instance_profile.instance.arn
   }
 
+  # Spot instance configuration (only when use_spot_instances is true)
+  # Note: ASG only supports 'one-time' spot instance type with 'terminate' behavior
+  dynamic "instance_market_options" {
+    for_each = var.use_spot_instances ? [1] : []
+    content {
+      market_type = "spot"
+      spot_options {
+        max_price                      = var.spot_max_price != "" ? var.spot_max_price : null
+        spot_instance_type             = "one-time"
+        instance_interruption_behavior = "terminate"
+      }
+    }
+  }
+
   # Network configuration
   network_interfaces {
     associate_public_ip_address = false
