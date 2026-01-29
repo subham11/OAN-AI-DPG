@@ -356,6 +356,103 @@ select_instance_pricing() {
 }
 
 # ==============================================================================
+# Zone Selection Helper
+# ==============================================================================
+# Prompts user to select availability zone(s) from a list of available zones.
+# Usage: _prompt_zone_selection zone1 zone2 ... -- zone1:price1 zone2:price2 ...
+# ==============================================================================
+
+_prompt_zone_selection() {
+    local available_azs=()
+    local az_with_prices=()
+    local parsing_prices=false
+    
+    # Parse arguments - zones before --, prices after
+    for arg in "$@"; do
+        if [[ "$arg" == "--" ]]; then
+            parsing_prices=true
+            continue
+        fi
+        if [[ "$parsing_prices" == "true" ]]; then
+            az_with_prices+=("$arg")
+        else
+            available_azs+=("$arg")
+        fi
+    done
+    
+    echo ""
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}  Select Availability Zone(s)${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${BOLD}Available zones with Spot capacity:${NC}"
+    echo ""
+    
+    local i=1
+    for az in "${available_azs[@]}"; do
+        # Find price for this AZ
+        local az_price=""
+        for price_entry in "${az_with_prices[@]}"; do
+            if [[ "$price_entry" == "$az:"* ]]; then
+                az_price="${price_entry#*:}"
+                break
+            fi
+        done
+        if [[ -n "$az_price" ]]; then
+            echo -e "    ${GREEN}${i})${NC} $az (Spot: ${az_price})"
+        else
+            echo -e "    ${GREEN}${i})${NC} $az"
+        fi
+        ((i++))
+    done
+    
+    echo ""
+    echo -e "  ${DIM}Tip: Select one zone, or two zones separated by comma (e.g., 1,3)${NC}"
+    echo ""
+    
+    while true; do
+        read -p "Enter zone number(s) (1-${#available_azs[@]}): " zone_choice
+        
+        # Parse user input - could be single number or comma-separated
+        local selected_zones=()
+        local valid=true
+        
+        IFS=',' read -ra choices <<< "$zone_choice"
+        for choice in "${choices[@]}"; do
+            # Trim whitespace
+            choice=$(echo "$choice" | tr -d ' ')
+            
+            # Validate it's a number in range
+            if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#available_azs[@]} ]]; then
+                local idx=$((choice - 1))
+                selected_zones+=("${available_azs[$idx]}")
+            else
+                valid=false
+                break
+            fi
+        done
+        
+        if [[ "$valid" == "true" ]] && [[ ${#selected_zones[@]} -ge 1 ]]; then
+            # Update global variables
+            if [[ ${#selected_zones[@]} -eq 1 ]]; then
+                AZ1="${selected_zones[0]}"
+                AZ2="${selected_zones[0]}"
+                AVAILABILITY_ZONES="${selected_zones[0]}"
+                log "SUCCESS" "Selected zone: ${AZ1}"
+            else
+                AZ1="${selected_zones[0]}"
+                AZ2="${selected_zones[1]}"
+                AVAILABILITY_ZONES="${selected_zones[0]},${selected_zones[1]}"
+                log "SUCCESS" "Selected zones: ${AZ1}, ${AZ2}"
+            fi
+            return 0
+        else
+            echo -e "${RED}Invalid selection. Please enter valid zone number(s).${NC}"
+        fi
+    done
+}
+
+# ==============================================================================
 # Spot Instance Capacity Check
 # ==============================================================================
 # Checks AWS Spot capacity for the selected instance type and availability
@@ -468,35 +565,6 @@ check_spot_capacity() {
             fi
         done
         
-        if [[ ${#alternative_azs[@]} -gt 0 ]]; then
-            echo -e "  ${GREEN}${BOLD}Recommended Alternatives:${NC}"
-            echo -e "  According to current Spot pricing, capacity is available in:"
-            for alt_az in "${alternative_azs[@]}"; do
-                # Find price for this AZ
-                local az_price=""
-                for price_entry in "${az_with_prices[@]}"; do
-                    if [[ "$price_entry" == "$alt_az:"* ]]; then
-                        az_price="${price_entry#*:}"
-                        break
-                    fi
-                done
-                if [[ -n "$az_price" ]]; then
-                    echo -e "    ${GREEN}•${NC} $alt_az (Spot: ${az_price})"
-                else
-                    echo -e "    ${GREEN}•${NC} $alt_az"
-                fi
-            done
-            echo ""
-            
-            # Suggest first two available alternatives
-            local suggested_az1="${alternative_azs[0]:-}"
-            local suggested_az2="${alternative_azs[1]:-$suggested_az1}"
-            
-            echo -e "  ${BOLD}To use recommended AZs, update your terraform.tfvars:${NC}"
-            echo -e "    ${CYAN}availability_zones = [\"$suggested_az1\", \"$suggested_az2\"]${NC}"
-            echo ""
-        fi
-        
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
         
@@ -505,13 +573,13 @@ check_spot_capacity() {
         echo -e "  ${GREEN}1)${NC} Continue anyway (instances may fail to launch)"
         echo -e "  ${GREEN}2)${NC} Cancel and update availability zones manually"
         
-        if [[ ${#alternative_azs[@]} -ge 2 ]]; then
-            echo -e "  ${GREEN}3)${NC} Auto-update to use ${alternative_azs[0]} and ${alternative_azs[1]}"
+        if [[ ${#available_azs[@]} -ge 1 ]]; then
+            echo -e "  ${GREEN}3)${NC} Choose from available zones"
         fi
         echo ""
         
         local max_choice=2
-        [[ ${#alternative_azs[@]} -ge 2 ]] && max_choice=3
+        [[ ${#available_azs[@]} -ge 1 ]] && max_choice=3
         
         while true; do
             read -p "Enter your choice (1-$max_choice): " capacity_choice
@@ -526,12 +594,7 @@ check_spot_capacity() {
                     ;;
                 3)
                     if [[ $max_choice -ge 3 ]]; then
-                        log "INFO" "Auto-updating availability zones to ${alternative_azs[0]} and ${alternative_azs[1]}"
-                        # Store for later use in config generation
-                        AVAILABILITY_ZONES="${alternative_azs[0]},${alternative_azs[1]}"
-                        AZ1="${alternative_azs[0]}"
-                        AZ2="${alternative_azs[1]}"
-                        log "SUCCESS" "Availability zones updated"
+                        _prompt_zone_selection "${available_azs[@]}" -- "${az_with_prices[@]}"
                         return 0
                     else
                         echo -e "${RED}Invalid choice.${NC}"
@@ -543,7 +606,14 @@ check_spot_capacity() {
             esac
         done
     else
-        log "SUCCESS" "Spot capacity is available in selected AZs!"
+        # Spot capacity is available - prompt user to choose zone(s)
+        echo ""
+        echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}${BOLD}  ✓ Spot Capacity Available${NC}"
+        echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        
+        _prompt_zone_selection "${available_azs[@]}" -- "${az_with_prices[@]}"
         return 0
     fi
 }
