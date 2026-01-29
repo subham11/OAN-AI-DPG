@@ -570,6 +570,9 @@ show_outputs() {
     # First show deployment summary table
     show_deployment_summary
     
+    # Show detailed resource table with ARNs
+    show_resource_details
+    
     log "STEP" "Connection Details"
     echo ""
     
@@ -587,5 +590,173 @@ show_outputs() {
     echo "  2. SSH to instances or access via load balancer URL"
     echo "  3. Run './deploy.sh --status' to check deployment status"
     echo "  4. Run './deploy.sh -p $PLATFORM -e $ENVIRONMENT --destroy' to tear down"
+    echo ""
+}
+
+# ==============================================================================
+# Detailed Resource Table with ARNs
+# ==============================================================================
+
+show_resource_details() {
+    log "STEP" "Created Resources Details"
+    echo ""
+    
+    cd "$ENV_DIR"
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                                    RESOURCE DETAILS                                                    ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    case "$PLATFORM" in
+        aws)
+            show_aws_resource_details
+            ;;
+        azure)
+            show_azure_resource_details
+            ;;
+        gcp)
+            show_gcp_resource_details
+            ;;
+    esac
+}
+
+show_aws_resource_details() {
+    # Table header
+    printf "${YELLOW}┌──────────────────────────────┬──────────────────────────────────────────────────────────────────────────────┐${NC}\n"
+    printf "${YELLOW}│  %-28s│  %-76s│${NC}\n" "Resource" "ID / ARN / Details"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # VPC
+    local vpc_id=$(terraform output -raw vpc_id 2>/dev/null || echo "N/A")
+    local vpc_cidr=$(terraform output -raw vpc_cidr 2>/dev/null || echo "N/A")
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "VPC ID" "$vpc_id"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "VPC CIDR" "$vpc_cidr"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Subnets
+    local public_subnets=$(terraform output -json public_subnet_ids 2>/dev/null | jq -r '.[]' 2>/dev/null | tr '\n' ', ' | sed 's/,$//')
+    local private_subnets=$(terraform output -json private_subnet_ids 2>/dev/null | jq -r '.[]' 2>/dev/null | tr '\n' ', ' | sed 's/,$//')
+    if [[ -n "$public_subnets" && "$public_subnets" != "null" ]]; then
+        printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Public Subnets" "${public_subnets:0:76}"
+    fi
+    if [[ -n "$private_subnets" && "$private_subnets" != "null" ]]; then
+        printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Private Subnets" "${private_subnets:0:76}"
+    fi
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Security Groups
+    local alb_sg=$(terraform output -raw alb_security_group_id 2>/dev/null || echo "N/A")
+    local instance_sg=$(terraform output -raw instance_security_group_id 2>/dev/null || echo "N/A")
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "ALB Security Group" "$alb_sg"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Instance Security Group" "$instance_sg"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Compute
+    local launch_template=$(terraform output -raw launch_template_id 2>/dev/null || echo "N/A")
+    local asg_name=$(terraform output -raw asg_name 2>/dev/null || echo "N/A")
+    local asg_arn=$(terraform output -raw asg_arn 2>/dev/null || echo "N/A")
+    local ami_id=$(terraform output -raw ami_id 2>/dev/null || echo "N/A")
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Launch Template" "$launch_template"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "ASG Name" "$asg_name"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "ASG ARN" "${asg_arn:0:76}"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "AMI ID" "$ami_id"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Load Balancer
+    local alb_arn=$(terraform output -raw alb_arn 2>/dev/null || echo "N/A")
+    local alb_dns=$(terraform output -raw alb_dns_name 2>/dev/null || echo "N/A")
+    local target_group_arn=$(terraform output -raw target_group_arn 2>/dev/null || echo "N/A")
+    if [[ "$alb_arn" != "N/A" && "$alb_arn" != "" && "$alb_arn" != "null" ]]; then
+        printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "ALB ARN" "${alb_arn:0:76}"
+        printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "ALB DNS Name" "${alb_dns:0:76}"
+        printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Target Group ARN" "${target_group_arn:0:76}"
+        printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    fi
+    
+    # Scheduler (Lambda + EventBridge)
+    local scheduler_lambdas=$(terraform output -json scheduler_lambda_arns 2>/dev/null || echo "null")
+    if [[ "$scheduler_lambdas" != "null" && "$scheduler_lambdas" != "" ]]; then
+        local start_lambda=$(echo "$scheduler_lambdas" | jq -r '.start' 2>/dev/null || echo "")
+        local stop_lambda=$(echo "$scheduler_lambdas" | jq -r '.stop' 2>/dev/null || echo "")
+        if [[ -n "$start_lambda" && "$start_lambda" != "null" ]]; then
+            printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Start Lambda ARN" "${start_lambda:0:76}"
+        fi
+        if [[ -n "$stop_lambda" && "$stop_lambda" != "null" ]]; then
+            printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Stop Lambda ARN" "${stop_lambda:0:76}"
+        fi
+    fi
+    
+    local scheduler_rules=$(terraform output -json scheduler_eventbridge_rules 2>/dev/null || echo "null")
+    if [[ "$scheduler_rules" != "null" && "$scheduler_rules" != "" ]]; then
+        local start_rule=$(echo "$scheduler_rules" | jq -r '.start' 2>/dev/null || echo "")
+        local stop_rule=$(echo "$scheduler_rules" | jq -r '.stop' 2>/dev/null || echo "")
+        if [[ -n "$start_rule" && "$start_rule" != "null" ]]; then
+            printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Start EventBridge Rule" "${start_rule:0:76}"
+        fi
+        if [[ -n "$stop_rule" && "$stop_rule" != "null" ]]; then
+            printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Stop EventBridge Rule" "${stop_rule:0:76}"
+        fi
+    fi
+    
+    # IAM Resources from state
+    local iam_roles=$(terraform state list 2>/dev/null | grep "aws_iam_role\." || true)
+    local iam_profiles=$(terraform state list 2>/dev/null | grep "aws_iam_instance_profile\." || true)
+    
+    if [[ -n "$iam_roles" || -n "$iam_profiles" ]]; then
+        printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+        for role in $iam_roles; do
+            local role_arn=$(terraform state show "$role" 2>/dev/null | grep "arn" | head -1 | awk -F'"' '{print $2}')
+            if [[ -n "$role_arn" ]]; then
+                printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "IAM Role" "${role_arn:0:76}"
+            fi
+        done
+        for profile in $iam_profiles; do
+            local profile_arn=$(terraform state show "$profile" 2>/dev/null | grep "arn" | head -1 | awk -F'"' '{print $2}')
+            if [[ -n "$profile_arn" ]]; then
+                printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Instance Profile" "${profile_arn:0:76}"
+            fi
+        done
+    fi
+    
+    printf "${YELLOW}└──────────────────────────────┴──────────────────────────────────────────────────────────────────────────────┘${NC}\n"
+    echo ""
+}
+
+show_azure_resource_details() {
+    printf "${YELLOW}┌──────────────────────────────┬──────────────────────────────────────────────────────────────────────────────┐${NC}\n"
+    printf "${YELLOW}│  %-28s│  %-76s│${NC}\n" "Resource" "ID / Details"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Get Azure outputs
+    local rg_name=$(terraform output -raw resource_group_name 2>/dev/null || echo "N/A")
+    local vnet_id=$(terraform output -raw vnet_id 2>/dev/null || echo "N/A")
+    local vmss_id=$(terraform output -raw vmss_id 2>/dev/null || echo "N/A")
+    local lb_ip=$(terraform output -raw load_balancer_ip 2>/dev/null || echo "N/A")
+    
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Resource Group" "$rg_name"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "VNet ID" "${vnet_id:0:76}"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "VM Scale Set ID" "${vmss_id:0:76}"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Load Balancer IP" "$lb_ip"
+    
+    printf "${YELLOW}└──────────────────────────────┴──────────────────────────────────────────────────────────────────────────────┘${NC}\n"
+    echo ""
+}
+
+show_gcp_resource_details() {
+    printf "${YELLOW}┌──────────────────────────────┬──────────────────────────────────────────────────────────────────────────────┐${NC}\n"
+    printf "${YELLOW}│  %-28s│  %-76s│${NC}\n" "Resource" "ID / Details"
+    printf "${YELLOW}├──────────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}\n"
+    
+    # Get GCP outputs
+    local network_id=$(terraform output -raw network_id 2>/dev/null || echo "N/A")
+    local mig_id=$(terraform output -raw mig_id 2>/dev/null || echo "N/A")
+    local lb_ip=$(terraform output -raw load_balancer_ip 2>/dev/null || echo "N/A")
+    
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Network ID" "${network_id:0:76}"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "MIG ID" "${mig_id:0:76}"
+    printf "${WHITE}│  %-28s│  %-76s│${NC}\n" "Load Balancer IP" "$lb_ip"
+    
+    printf "${YELLOW}└──────────────────────────────┴──────────────────────────────────────────────────────────────────────────────┘${NC}\n"
     echo ""
 }

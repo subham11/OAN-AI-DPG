@@ -11,7 +11,6 @@
 
 select_platform() {
     echo ""
-    log "STEP" "Select deployment platform"
     echo ""
     echo -e "${BOLD}Available Platforms:${NC}"
     echo ""
@@ -44,15 +43,15 @@ select_platform() {
 
 select_region() {
     local provider="$1"
-    
+
     if [[ "$provider" == "onprem" ]]; then
         log "INFO" "On-premise deployment - no region selection needed"
         return
     fi
-    
+
     local india_region=$(get_india_region "$provider")
     local us_region=$(get_us_region "$provider")
-    
+
     echo ""
     log "STEP" "Select deployment region"
     echo ""
@@ -61,30 +60,30 @@ select_region() {
     echo "  2) India (Mumbai) - $india_region"
     echo "  3) Custom region"
     echo ""
-    
+
     while true; do
         read -p "Enter your choice (1-3) [1]: " choice
         choice=${choice:-1}
         case "$choice" in
-            1) 
+            1)
                 REGION="$us_region"
                 PREFERRED_REGION="us"
-                break 
+                break
                 ;;
-            2) 
+            2)
                 REGION="$india_region"
                 PREFERRED_REGION="india"
-                break 
+                break
                 ;;
-            3) 
+            3)
                 read -p "Enter custom region: " REGION
                 PREFERRED_REGION="custom"
-                break 
+                break
                 ;;
             *) echo -e "${RED}Invalid choice. Please enter 1-3.${NC}" ;;
         esac
     done
-    
+
     log "SUCCESS" "Selected region: $REGION"
 }
 
@@ -336,23 +335,71 @@ select_instance_pricing() {
         read -p "Enter your choice (1-2) [1]: " choice
         choice=${choice:-1}
         case "$choice" in
-            1) 
+            1)
                 USE_SPOT_INSTANCES="false"
                 log "SUCCESS" "Selected: On-Demand instances"
-                break 
+                check_vt_quota "OnDemand"
+                break
                 ;;
-            2) 
+            2)
                 USE_SPOT_INSTANCES="true"
                 log "SUCCESS" "Selected: Spot instances (cost savings enabled)"
+                check_vt_quota "Spot"
                 # Run spot capacity check
                 if ! check_spot_capacity; then
                     log "WARN" "Spot capacity check indicated potential issues"
                 fi
-                break 
+                break
                 ;;
             *) echo -e "${RED}Invalid choice. Please enter 1 or 2.${NC}" ;;
         esac
     done
+
+# Quota check for VT (G/VT) OnDemand/Spot instance
+}
+
+check_vt_quota() {
+    local mode="$1" # OnDemand or Spot
+    local region="${REGION:-us-east-1}"
+    local instance_type="${INSTANCE_TYPE:-g5.4xlarge}"
+    local quota_code="L-DB2E81BA" # All G and VT Spot Instance Requests
+    if [[ "$mode" == "OnDemand" ]]; then
+        quota_code="L-1216C47A" # All G and VT On-Demand Instances
+    fi
+
+    local quota
+    quota=$(aws service-quotas get-service-quota \
+        --service-code ec2 \
+        --quota-code "$quota_code" \
+        --region "$region" \
+        --query 'Quota.Value' \
+        --output text 2>/dev/null)
+
+    local used
+    used=$(aws ec2 describe-account-attributes \
+        --attribute-names max-instances \
+        --region "$region" \
+        --query 'AccountAttributes[0].AttributeValues[0].AttributeValue' \
+        --output text 2>/dev/null)
+
+    if [[ -z "$quota" || "$quota" == "None" || "$quota" == "null" ]]; then
+        log "WARN" "Could not retrieve $mode quota for G/VT instances in $region."
+        return
+    fi
+
+    # If used is not available, just show quota
+    if [[ -z "$used" || "$used" == "None" || "$used" == "null" ]]; then
+        echo -e "${YELLOW}⚠${NC} ${BOLD}Quota for $mode G/VT instances in $region: $quota${NC} (usage unavailable)"
+        return
+    fi
+
+    if (( $(echo "$used >= $quota" | bc -l) )); then
+        echo -e "${RED}✗${NC} ${BOLD}Insufficient $mode quota for G/VT instances in $region!${NC} (Used: $used / Quota: $quota)"
+        echo -e "${RED}  Please request a quota increase before proceeding.${NC}"
+        exit 253
+    else
+        echo -e "${GREEN}✓${NC} ${BOLD}Sufficient $mode quota for G/VT instances in $region.${NC} (Used: $used / Quota: $quota)"
+    fi
 }
 
 # ==============================================================================

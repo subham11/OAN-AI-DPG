@@ -73,7 +73,7 @@ run_interactive_deployment() {
     
     # Step 3: Platform selection
     select_platform
-    
+
     # Step 3.5: Set working directory
     if [[ "$PLATFORM" != "onprem" ]]; then
         if ! set_working_directory "$PLATFORM" "$ENVIRONMENT"; then
@@ -84,47 +84,47 @@ run_interactive_deployment() {
             exit 1
         fi
     fi
-    
-    # Step 4: Region selection
-    select_region "$PLATFORM"
-    
-    # Step 5: Template selection
-    select_template
-    
-    # Step 5.5: Instance pricing type (Spot vs On-Demand) - AWS only
-    select_instance_pricing
-    
-    # Step 6: Configure credentials
+
+    # Step 4: Configure credentials (moved before region selection)
     configure_credentials "$PLATFORM"
-    
-    # Step 7: Validate credentials
+
+    # Step 5: Validate credentials
     if [[ "$PLATFORM" != "onprem" ]]; then
         if ! validate_cloud_credentials "$PLATFORM"; then
             log "ERROR" "Credential validation failed"
             exit 1
         fi
     fi
-    
+
+    # Step 6: Region selection
+    select_region "$PLATFORM"
+
+    # Step 7: Template selection
+    select_template
+
+    # Step 7.5: Instance pricing type (Spot vs On-Demand) - AWS only
+    select_instance_pricing
+
     # Step 8: Generate configuration
     generate_config "$PLATFORM" "$TEMPLATE"
-    
+
     # Step 9: Terraform operations
     echo ""
     if ! terraform_init; then
         log "ERROR" "Setup failed at initialization"
         exit 1
     fi
-    
+
     if ! terraform_validate; then
         log "ERROR" "Setup failed at validation"
         exit 1
     fi
-    
+
     if ! terraform_plan; then
         log "ERROR" "Setup failed at planning"
         exit 1
     fi
-    
+
     # Step 10: Apply
     if terraform_apply; then
         show_outputs

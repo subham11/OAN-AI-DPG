@@ -32,7 +32,7 @@ configure_aws_credentials() {
     echo -e "${BOLD}AWS Authentication${NC}"
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}  Enter your AWS Access Keys to deploy the infrastructure.${NC}"
+    echo -e "${CYAN}  Enter your AWS credentials to deploy the infrastructure.${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "  1) Enter Access Keys"
@@ -44,12 +44,13 @@ configure_aws_credentials() {
         case "$key_choice" in
             1)
                 echo ""
+                read -p "  AWS Account ID: " AWS_ACCOUNT_ID
                 read -p "  Access Key ID: " AWS_ACCESS_KEY
                 read -sp "  Secret Access Key: " AWS_SECRET_KEY
                 echo ""
                 
-                if [[ -z "$AWS_ACCESS_KEY" || -z "$AWS_SECRET_KEY" ]]; then
-                    log "ERROR" "Both Access Key ID and Secret Access Key are required"
+                if [[ -z "$AWS_ACCOUNT_ID" || -z "$AWS_ACCESS_KEY" || -z "$AWS_SECRET_KEY" ]]; then
+                    log "ERROR" "AWS Account ID, Access Key ID, and Secret Access Key are all required"
                     continue
                 fi
                 
@@ -74,12 +75,13 @@ guide_create_access_keys() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo -e "  ${GREEN}Step 1:${NC} Login to AWS Console"
-    echo -e "  ${GREEN}Step 2:${NC} Click your username (top-right corner)"
-    echo -e "  ${GREEN}Step 3:${NC} Click \"Security credentials\""
-    echo -e "  ${GREEN}Step 4:${NC} Scroll to \"Access keys\" section"
-    echo -e "  ${GREEN}Step 5:${NC} Click \"Create access key\""
-    echo -e "  ${GREEN}Step 6:${NC} Select \"Command Line Interface (CLI)\""
-    echo -e "  ${GREEN}Step 7:${NC} Copy both keys and save them securely!"
+    echo -e "  ${GREEN}Step 2:${NC} Note your Account ID (shown at top-right, 12-digit number)"
+    echo -e "  ${GREEN}Step 3:${NC} Click your username (top-right corner)"
+    echo -e "  ${GREEN}Step 4:${NC} Click \"Security credentials\""
+    echo -e "  ${GREEN}Step 5:${NC} Scroll to \"Access keys\" section"
+    echo -e "  ${GREEN}Step 6:${NC} Click \"Create access key\""
+    echo -e "  ${GREEN}Step 7:${NC} Select \"Command Line Interface (CLI)\""
+    echo -e "  ${GREEN}Step 8:${NC} Copy Account ID and both keys and save them securely!"
     echo ""
     
     echo -e "  Press ${GREEN}ENTER${NC} to open AWS Console..."
@@ -93,15 +95,16 @@ guide_create_access_keys() {
     fi
     
     echo ""
-    echo -e "  ${BOLD}Once you have your Access Keys, enter them below:${NC}"
+    echo -e "  ${BOLD}Once you have your Account ID and Access Keys, enter them below:${NC}"
     echo ""
     
+    read -p "  AWS Account ID: " AWS_ACCOUNT_ID
     read -p "  Access Key ID: " AWS_ACCESS_KEY
     read -sp "  Secret Access Key: " AWS_SECRET_KEY
     echo ""
     
-    if [[ -z "$AWS_ACCESS_KEY" || -z "$AWS_SECRET_KEY" ]]; then
-        log "ERROR" "Both credentials are required."
+    if [[ -z "$AWS_ACCOUNT_ID" || -z "$AWS_ACCESS_KEY" || -z "$AWS_SECRET_KEY" ]]; then
+        log "ERROR" "All credentials are required."
         exit 1
     fi
     
@@ -124,6 +127,25 @@ validate_aws_credentials_internal() {
         
         echo -e "  ${GREEN}✓${NC} Account: $verified_account"
         echo -e "  ${GREEN}✓${NC} User:    $verified_arn"
+        
+        # Verify account ID matches
+        if [[ "$AWS_ACCOUNT_ID" != "$verified_account" ]]; then
+            log "WARN" "Account ID mismatch!"
+            echo -e "  ${YELLOW}⚠${NC} Entered Account ID: $AWS_ACCOUNT_ID"
+            echo -e "  ${YELLOW}⚠${NC} Verified Account ID: $verified_account"
+            echo ""
+            if confirm "  The Account ID doesn't match. Continue with verified ID ($verified_account)?"; then
+                AWS_ACCOUNT_ID="$verified_account"
+                export AWS_ACCOUNT_ID
+                log "INFO" "Using verified Account ID: $AWS_ACCOUNT_ID"
+            else
+                log "ERROR" "Account ID verification failed"
+                exit 1
+            fi
+        else
+            export AWS_ACCOUNT_ID
+            log "SUCCESS" "Account ID verified: $AWS_ACCOUNT_ID"
+        fi
     else
         log "ERROR" "AWS credential validation failed"
         if confirm "  Would you like to try entering the keys again?"; then

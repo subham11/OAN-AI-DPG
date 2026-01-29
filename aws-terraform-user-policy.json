@@ -4,11 +4,8 @@
     {
       "Sid": "EC2FullAccess",
       "Effect": "Allow",
-      "Action": [
-        "ec2:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested and verified working"
+      "Action": ["ec2:*"],
+      "Resource": "*"
     },
     {
       "Sid": "IAMRoleManagement",
@@ -27,10 +24,7 @@
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy"
       ],
-      "Resource": [
-        "arn:aws:iam::379220350808:role/dpg-infra-*"
-      ],
-      "Comment": "REQUIRED ONLY - Create/Delete/Get role, attach/detach policies, manage inline policies, list role policies, and tag/untag role"
+      "Resource": ["arn:aws:iam::*:role/dpg-infra-*"]
     },
     {
       "Sid": "IAMInstanceProfileManagement",
@@ -45,10 +39,7 @@
         "iam:AddRoleToInstanceProfile",
         "iam:RemoveRoleFromInstanceProfile"
       ],
-      "Resource": [
-        "arn:aws:iam::379220350808:instance-profile/dpg-infra-*"
-      ],
-      "Comment": "❌ MISSING ALL - Tested CreateInstanceProfile: ACCESS DENIED, Tested ListInstanceProfiles: ACCESS DENIED - CRITICAL BLOCKER"
+      "Resource": ["arn:aws:iam::*:instance-profile/dpg-infra-*"]
     },
     {
       "Sid": "IAMPolicyManagement",
@@ -63,20 +54,13 @@
         "iam:TagPolicy",
         "iam:UntagPolicy"
       ],
-      "Resource": [
-        "arn:aws:iam::379220350808:policy/dpg-infra-*"
-      ],
-      "Comment": "PARTIAL - ✅ Have: CreatePolicy, DeletePolicy, GetPolicy | ❌ MISSING: TagPolicy, UntagPolicy"
+      "Resource": ["arn:aws:iam::*:policy/dpg-infra-*"]
     },
     {
       "Sid": "IAMPassRole",
       "Effect": "Allow",
-      "Action": [
-        "iam:PassRole"
-      ],
-      "Resource": [
-        "arn:aws:iam::379220350808:role/dpg-infra-*"
-      ],
+      "Action": ["iam:PassRole"],
+      "Resource": ["arn:aws:iam::*:role/dpg-infra-*"],
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": [
@@ -85,53 +69,37 @@
             "vpc-flow-logs.amazonaws.com"
           ]
         }
-      },
-      "Comment": "❌ MISSING - Not tested yet but required for EC2, Lambda, and VPC Flow Logs role assignment - CRITICAL BLOCKER"
+      }
     },
     {
       "Sid": "LambdaFullAccess",
       "Effect": "Allow",
-      "Action": [
-        "lambda:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested lambda functions creation works"
+      "Action": ["lambda:*"],
+      "Resource": "*"
     },
     {
       "Sid": "EventBridgeFullAccess",
       "Effect": "Allow",
-      "Action": [
-        "events:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested EventBridge rules creation, ListTagsForResource, TagResource all work"
+      "Action": ["events:*"],
+      "Resource": "*"
     },
     {
       "Sid": "CloudWatchLogsFullAccess",
       "Effect": "Allow",
-      "Action": [
-        "logs:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested log group creation and deletion works"
+      "Action": ["logs:*"],
+      "Resource": "*"
     },
     {
       "Sid": "ElasticLoadBalancingFullAccess",
       "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested ALB and target group creation works"
+      "Action": ["elasticloadbalancing:*"],
+      "Resource": "*"
     },
     {
       "Sid": "AutoScalingFullAccess",
       "Effect": "Allow",
-      "Action": [
-        "autoscaling:*"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested ASG describe operations work"
+      "Action": ["autoscaling:*"],
+      "Resource": "*"
     },
     {
       "Sid": "CloudWatchMetrics",
@@ -142,8 +110,7 @@
         "cloudwatch:GetMetricStatistics",
         "cloudwatch:ListMetrics"
       ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Standard metrics permissions work"
+      "Resource": "*"
     },
     {
       "Sid": "SSMAccess",
@@ -153,17 +120,13 @@
         "ssm:GetParameters",
         "ssm:PutParameter"
       ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - SSM permissions work"
+      "Resource": "*"
     },
     {
       "Sid": "STSAssumeRole",
       "Effect": "Allow",
-      "Action": [
-        "sts:GetCallerIdentity"
-      ],
-      "Resource": "*",
-      "Comment": "✅ ALREADY HAVE - Tested GetCallerIdentity works"
+      "Action": ["sts:GetCallerIdentity"],
+      "Resource": "*"
     }
   ]
 }
