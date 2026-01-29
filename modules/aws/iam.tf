@@ -23,7 +23,7 @@ resource "aws_iam_role" "scheduler_lambda" {
     ]
   })
 
-  # Note: Tags removed to avoid iam:TagRole permission requirement
+  tags = var.common_tags
 }
 
 # Lambda Basic Execution Policy

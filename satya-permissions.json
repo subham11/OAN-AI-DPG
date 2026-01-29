@@ -1,0 +1,48 @@
+{
+  "user": "Satya",
+  "profile": "satya",
+  "generated_on": "2026-01-29",
+  "note": "Exact IAM policy details could not be fetched due to AccessDenied for iam:GetAccountAuthorizationDetails. This file reflects permissions verified via CLI tests and Terraform operations.",
+  "verified_allowed": [
+    "iam:CreateRole",
+    "iam:DeleteRole",
+    "iam:PutRolePolicy",
+    "iam:GetRolePolicy",
+    "iam:AttachRolePolicy",
+    "iam:DetachRolePolicy",
+    "iam:ListRolePolicies",
+    "iam:ListAttachedRolePolicies",
+    "iam:CreatePolicy",
+    "iam:DeletePolicy",
+    "iam:GetPolicy",
+    "events:ListRules",
+    "events:ListTagsForResource",
+    "events:TagResource",
+    "events:UntagResource",
+    "ec2:DescribeVpcs",
+    "lambda:ListFunctions",
+    "autoscaling:DescribeAutoScalingGroups"
+  ],
+  "verified_denied": [
+    "iam:CreateInstanceProfile",
+    "iam:ListInstanceProfiles",
+    "iam:GetUser",
+    "iam:GetAccountAuthorizationDetails"
+  ],
+  "unknown_unverified": [
+    "iam:PassRole",
+    "iam:DeleteInstanceProfile",
+    "iam:GetInstanceProfile",
+    "iam:TagRole",
+    "iam:UntagRole",
+    "iam:TagInstanceProfile",
+    "iam:UntagInstanceProfile",
+    "iam:TagPolicy",
+    "iam:UntagPolicy",
+    "ec2:* (other than DescribeVpcs)",
+    "lambda:* (other than ListFunctions)",
+    "logs:*",
+    "elasticloadbalancing:*",
+    "autoscaling:* (other than DescribeAutoScalingGroups)"
+  ]
+}

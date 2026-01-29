@@ -31,7 +31,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
     ]
   })
 
-  # Note: Tags removed to avoid iam:TagRole permission requirement
+  tags = var.common_tags
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
