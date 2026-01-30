@@ -5,6 +5,10 @@
 # ------------------------------------------------------------------------------
 # Application Load Balancer
 # ------------------------------------------------------------------------------
+# Note: ALB requires subnets in different AZs. We use local.alb_subnet_ids
+# which ensures only ONE subnet per AZ is used, avoiding the error:
+# "A load balancer cannot be attached to multiple subnets in the same AZ"
+# ------------------------------------------------------------------------------
 resource "aws_lb" "main" {
   count = var.enable_load_balancer ? 1 : 0
 
@@ -12,7 +16,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  subnets            = local.alb_subnet_ids
 
   enable_deletion_protection = var.environment == "prod" ? true : false
   enable_http2               = true
@@ -38,7 +42,7 @@ resource "aws_lb_target_group" "main" {
   name        = "${var.name_prefix}-tg"
   port        = var.app_port
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
   target_type = "instance"
 
   health_check {

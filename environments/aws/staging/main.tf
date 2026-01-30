@@ -73,11 +73,15 @@ module "gpu_infrastructure" {
   common_tags  = local.common_tags
 
   # Network
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  availability_zones   = var.availability_zones
-  allowed_ssh_cidrs    = var.allowed_ssh_cidrs
+  use_existing_vpc            = var.use_existing_vpc
+  existing_vpc_id             = var.existing_vpc_id
+  existing_public_subnet_ids  = var.existing_public_subnet_ids
+  existing_private_subnet_ids = var.existing_private_subnet_ids
+  vpc_cidr                    = var.vpc_cidr
+  public_subnet_cidrs         = var.public_subnet_cidrs
+  private_subnet_cidrs        = var.private_subnet_cidrs
+  availability_zones          = var.availability_zones
+  allowed_ssh_cidrs           = var.allowed_ssh_cidrs
   allowed_http_cidrs   = var.allowed_http_cidrs
 
   # Compute

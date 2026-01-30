@@ -1,90 +1,181 @@
-# Missing IAM Permissions for DPG GPU Infrastructure Deployment
+# AWS IAM Permissions for DPG GPU Infrastructure Deployment
 
-## Summary
-After running `terraform apply`, **1 critical IAM permission** was identified as missing that blocks the complete infrastructure deployment.
+## Overview
+
+The DPG deployment script automatically checks for required AWS IAM permissions before executing Terraform. This ensures that deployment failures due to missing permissions are caught early, saving time and preventing partial infrastructure states.
+
+## Pre-Deployment Permission Check
+
+When you run `./deploy.sh`, the script will:
+
+1. **Validate your AWS credentials** - Ensures your access keys are valid
+2. **Check all required permissions** - Uses `iam:SimulatePrincipalPolicy` to verify you have the necessary permissions
+3. **Report missing permissions** - Displays a clear list of what's missing
+4. **Provide next steps** - Guides you on how to obtain the required permissions
 
 ---
 
-## Missing Permission Details
+## Required AWS Permissions
 
-### 1. **iam:CreateInstanceProfile** ⚠️ CRITICAL
+### Complete Policy File
 
-**Status:** BLOCKING - Prevents EC2 instance creation
+The complete IAM policy required for deployment is located at:
+```
+aws-terraform-user-policy.json
+```
 
-**Error Message:**
+### Permission Categories
+
+#### EC2 (Compute & Networking)
+- Full EC2 access for VPC, subnets, security groups, instances, NAT gateways, etc.
+
+#### IAM (Identity & Access Management)
+- Create/manage roles for EC2 instances, Lambda functions, and VPC Flow Logs
+- Create/manage instance profiles
+- Attach/detach policies
+- Pass roles to services (EC2, Lambda)
+
+#### Lambda (Serverless Functions)
+- Create/manage Lambda functions for instance scheduling
+
+#### EventBridge (Scheduling)
+- Create rules and targets for start/stop schedules
+
+#### CloudWatch (Monitoring & Logging)
+- Create log groups, log streams
+- Put metrics and alarms
+
+#### Elastic Load Balancing
+- Create/manage Application Load Balancers and target groups
+
+#### Auto Scaling
+- Create/manage Auto Scaling groups
+
+---
+
+## If Permissions Are Missing
+
+### What You'll See
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠  MISSING AWS PERMISSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Your AWS account is missing the following permissions required
+  to deploy the DPG infrastructure:
+
+  iam:
+    ✗ iam:CreateInstanceProfile
+    ✗ iam:DeleteInstanceProfile
+
+  ec2:
+    ✗ ec2:CreateVpc
+    ...
+```
+
+### What To Do
+
+#### Option 1: Request Permissions from Your AWS Administrator
+
+1. Locate the policy file: `aws-terraform-user-policy.json`
+2. Send this file to your AWS Administrator
+3. Ask them to create an IAM policy with this content
+4. Have them attach the policy to your IAM user or role
+
+**Email Template for Your Admin:**
+```
+Subject: Request for IAM Permissions - DPG Infrastructure Deployment
+
+Hi,
+
+I need to deploy the Digital Public Goods (DPG) GPU infrastructure on AWS.
+The deployment requires specific IAM permissions that I currently don't have.
+
+Please find attached the required IAM policy document (aws-terraform-user-policy.json).
+
+Could you please:
+1. Create a new IAM policy with the attached JSON content
+2. Attach this policy to my IAM user: [YOUR_USERNAME]
+
+The permissions are scoped to resources prefixed with "dpg-infra-*" where possible
+to follow the principle of least privilege.
+
+Thank you!
+```
+
+#### Option 2: Use Administrator Credentials
+
+If you have access to an AWS account with Administrator access, you can use those credentials instead.
+
+---
+
+## Administrator Guide
+
+### Creating the IAM Policy
+
+1. Log into the AWS Console
+2. Navigate to **IAM → Policies → Create policy**
+3. Click **JSON** tab
+4. Paste the contents of `aws-terraform-user-policy.json`
+5. Click **Next**
+6. Name the policy: `DPG-Infrastructure-Deployment-Policy`
+7. Add description: `Permissions required for deploying DPG GPU infrastructure via Terraform`
+8. Click **Create policy**
+
+### Attaching the Policy to a User
+
+1. Navigate to **IAM → Users**
+2. Select the user who needs deployment access
+3. Click **Add permissions → Attach policies directly**
+4. Search for `DPG-Infrastructure-Deployment-Policy`
+5. Check the box and click **Add permissions**
+
+### Security Considerations
+
+The policy follows AWS best practices:
+
+- **Resource Scoping**: IAM permissions are scoped to `dpg-infra-*` prefixed resources
+- **Service Boundaries**: Only includes services required for the infrastructure
+- **Condition Keys**: PassRole is restricted to specific services (EC2, Lambda)
+
+---
+
+## Troubleshooting
+
+### "Cannot simulate IAM policies"
+
+If you see this warning, your account lacks the `iam:SimulatePrincipalPolicy` permission. The script will fall back to basic service access checks.
+
+### "Permission check passed but Terraform still fails"
+
+The permission checker simulates policy evaluation but cannot account for:
+- Service Control Policies (SCPs) at the AWS Organization level
+- Permission boundaries on your IAM user/role
+- Resource-based policies that may deny access
+
+Contact your AWS Administrator if you encounter access denied errors despite passing the permission check.
+
+### Generating a Permission Report
+
+When permissions are missing, the script automatically generates:
+- `missing-permissions-report.txt` - A detailed report you can share with your admin
+
+---
+
+## Historical Issues
+
+### iam:CreateInstanceProfile (Resolved)
+
+**Status:** Previously BLOCKING - Now included in permission checks
+
+**Error:**
 ```
 Error: creating IAM Instance Profile (dpg-infra-staging-instance-profile): 
-operation error IAM: CreateInstanceProfile, https response error StatusCode: 403, 
-RequestID: 8f04a2ea-d0f2-4a6e-a063-9438b5472052, api error AccessDenied: 
-
-User: arn:aws:iam::379220350808:user/Satya is not authorized to perform: 
-iam:CreateInstanceProfile on resource: 
-arn:aws:iam::379220350808:instance-profile/dpg-infra-staging-instance-profile 
-because no identity-based policy allows the iam:CreateInstanceProfile action
+operation error IAM: CreateInstanceProfile, api error AccessDenied
 ```
 
-**Location in Code:**
-- File: `modules/aws/compute.tf`
-- Line: 37
-- Resource: `aws_iam_instance_profile.instance`
-
-**What It Does:**
-Creates an IAM Instance Profile that links an EC2 instance role to EC2 instances. This allows EC2 instances to assume the role and access AWS services (like S3, CloudWatch, Systems Manager) with the permissions granted to that role.
-
-**Required for Terraform Operations:**
-- `terraform apply` - Creates EC2 instances that need the instance profile
-- `terraform destroy` - Deletes the instance profile when tearing down infrastructure
-
-**Related Permissions Working:**
-- ✅ `iam:CreateRole` - Successfully created instance role
-- ✅ `iam:CreatePolicy` - Successfully created policies
-- ✅ `iam:AttachRolePolicy` - Successfully attached policies to roles
-- ✅ `iam:PutRolePolicy` - Successfully added inline policies to roles
-- ✅ `iam:DeleteRole` - Would work for cleanup
-- ✅ `iam:DeletePolicy` - Would work for cleanup
-
----
-
-## What Was Successfully Created
-
-Before hitting the permission error, Terraform successfully created:
-
-### Network Infrastructure ✅
-- VPC with CIDR 10.0.0.0/16
-- 2 Public Subnets
-- 2 Private Subnets
-- Internet Gateway
-- 2 NAT Gateways
-- 2 Elastic IPs
-- Route tables (public and private)
-- Route table associations
-
-### IAM Resources ✅
-- `dpg-infra-staging-instance-role` (EC2 instance role)
-- `dpg-infra-staging-scheduler-lambda-role` (Lambda execution role)
-- `dpg-infra-staging-vpc-flow-logs-role` (VPC Flow Logs role)
-- Policy attachments (SSM, CloudWatch, Lambda basic execution)
-- Custom policies for logging and scheduling
-
-### EventBridge & Monitoring ✅
-- CloudWatch Event Rules (start/stop instances on schedule)
-- CloudWatch Log Groups for Lambda functions
-- VPC Flow Logs configuration
-
-### Load Balancer ✅
-- Application Load Balancer target group
-
-### Security Groups ✅
-- ALB security group
-- Instance security group
-
----
-
-## Action Required
-
-### For Administrator:
-Add the following IAM permission to the Satya user's inline policy:
-
+**Solution:** Ensure your policy includes:
 ```json
 {
   "Effect": "Allow",
@@ -92,12 +183,9 @@ Add the following IAM permission to the Satya user's inline policy:
     "iam:CreateInstanceProfile",
     "iam:DeleteInstanceProfile"
   ],
-  "Resource": "arn:aws:iam::379220350808:instance-profile/*"
+  "Resource": "arn:aws:iam::*:instance-profile/dpg-infra-*"
 }
 ```
-
-**Rationale:**
-- `iam:CreateInstanceProfile` - Needed for `terraform apply` to create the instance profile
 - `iam:DeleteInstanceProfile` - Needed for `terraform destroy` to clean up the instance profile
 
 ### For User (Satya):

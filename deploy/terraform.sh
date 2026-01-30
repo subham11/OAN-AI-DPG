@@ -11,6 +11,9 @@ DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source Modular Components
 # ==============================================================================
 
+# Pre-flight checks for resource conflicts
+source "${DEPLOY_DIR}/preflight_checks.sh"
+
 # Terraform initialization and validation
 source "${DEPLOY_DIR}/terraform_init.sh"
 

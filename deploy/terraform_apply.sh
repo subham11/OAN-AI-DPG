@@ -9,16 +9,164 @@
 # ==============================================================================
 # Rollback on Failure
 # ==============================================================================
+# Uses the comprehensive cleanup script for safe resource deletion in the
+# correct dependency order to avoid orphaned infrastructure.
+#
+# Deletion Order:
+# 1. EC2 / ASG / ELB
+# 2. NAT Gateway → Release EIP
+# 3. VPC Endpoints
+# 4. Peering / TGW / VPN
+# 5. RDS / OpenSearch / ElastiCache
+# 6. ECS / EKS / Lambda (VPC-enabled)
+# 7. ENIs
+# 8. Subnets
+# 9. Route tables / SGs / NACLs
+# 10. Internet Gateway
+# 11. VPC
+# 12. Orphaned resources (CloudWatch, IAM, EventBridge)
+# ==============================================================================
 
 rollback_on_failure() {
+    local error_type="${1:-unknown}"
+    local region="${REGION:-us-east-1}"
+    local project_prefix="${PROJECT_NAME:-dpg-infra}"
+    
     log "WARN" "Deployment failed - initiating automatic rollback..."
     echo ""
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  ROLLBACK IN PROGRESS${NC}"
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║                    ROLLBACK IN PROGRESS                       ║${NC}"
+    echo -e "${RED}║                                                               ║${NC}"
+    echo -e "${RED}║  Failure Type: $(printf '%-44s' "$error_type")║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo "Cleaning up partially created resources to avoid orphaned infrastructure..."
+    echo "Cleaning up partially created resources in safe dependency order..."
     echo ""
+    
+    save_state "rolling_back"
+    
+    # Determine which cleanup method to use based on platform
+    case "$PLATFORM" in
+        aws)
+            _rollback_aws_resources "$region" "$project_prefix"
+            ;;
+        azure)
+            _rollback_azure_resources
+            ;;
+        gcp)
+            _rollback_gcp_resources
+            ;;
+        *)
+            _rollback_terraform_only
+            ;;
+    esac
+    
+    # Clean build artifacts
+    rm -f "${ENV_DIR}/tfplan" 2>/dev/null
+    
+    echo ""
+    echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║                    ROLLBACK COMPLETE                          ║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# ==============================================================================
+# AWS Rollback - Uses comprehensive cleanup script
+# ==============================================================================
+
+_rollback_aws_resources() {
+    local region="$1"
+    local project_prefix="$2"
+    local cleanup_script="${SCRIPT_DIR}/cleanup.sh"
+    
+    # Check if cleanup script exists
+    if [[ -f "$cleanup_script" ]]; then
+        log "INFO" "Using comprehensive cleanup script for safe rollback..."
+        echo ""
+        
+        # Build cleanup command with appropriate options
+        local cleanup_cmd="$cleanup_script --region $region --prefix $project_prefix"
+        
+        # Add AWS profile if set
+        if [[ -n "$AWS_PROFILE" ]]; then
+            cleanup_cmd="$cleanup_cmd --profile $AWS_PROFILE"
+        fi
+        
+        # Add environment
+        cleanup_cmd="$cleanup_cmd --environment ${ENVIRONMENT:-staging}"
+        
+        # Force mode for automatic rollback (no prompts)
+        cleanup_cmd="$cleanup_cmd --force"
+        
+        log "INFO" "Executing: $cleanup_cmd"
+        echo ""
+        
+        if eval "$cleanup_cmd"; then
+            log "SUCCESS" "Comprehensive cleanup completed successfully"
+            save_state "rolled_back"
+        else
+            log "WARN" "Cleanup script encountered some issues"
+            log "INFO" "Falling back to Terraform destroy..."
+            _rollback_terraform_only
+        fi
+    else
+        log "WARN" "Cleanup script not found at: $cleanup_script"
+        log "INFO" "Falling back to Terraform destroy..."
+        _rollback_terraform_only
+    fi
+}
+
+# ==============================================================================
+# Azure Rollback
+# ==============================================================================
+
+_rollback_azure_resources() {
+    local resource_group="${PROJECT_NAME:-dpg-infra}-${ENVIRONMENT:-staging}-rg"
+    
+    log "INFO" "Attempting to delete Azure resource group: $resource_group"
+    
+    # Try Azure CLI first for faster cleanup
+    if command -v az &>/dev/null; then
+        if az group exists --name "$resource_group" 2>/dev/null | grep -q "true"; then
+            log "INFO" "Deleting resource group (this may take several minutes)..."
+            if az group delete --name "$resource_group" --yes --no-wait 2>/dev/null; then
+                log "SUCCESS" "Azure resource group deletion initiated"
+                save_state "rolled_back"
+                return 0
+            fi
+        fi
+    fi
+    
+    # Fall back to Terraform destroy
+    _rollback_terraform_only
+}
+
+# ==============================================================================
+# GCP Rollback
+# ==============================================================================
+
+_rollback_gcp_resources() {
+    local project_id
+    project_id=$(gcloud config get-value project 2>/dev/null || echo "")
+    
+    log "INFO" "Cleaning up GCP resources..."
+    
+    # Try Terraform destroy first as it handles dependencies better
+    _rollback_terraform_only
+    
+    # Then clean up any orphaned service accounts
+    if [[ -n "$project_id" ]]; then
+        _cleanup_gcp_iam_resources "${PROJECT_NAME:-dpg-infra}"
+    fi
+}
+
+# ==============================================================================
+# Terraform-only Rollback (fallback)
+# ==============================================================================
+
+_rollback_terraform_only() {
+    log "INFO" "Running Terraform destroy for rollback..."
     
     cd "$ENV_DIR"
     
@@ -29,23 +177,21 @@ rollback_on_failure() {
     else
         log "ERROR" "Terraform rollback failed - some resources may remain"
         echo ""
-        echo -e "${RED}WARNING: Automatic rollback failed!${NC}"
-        echo "Please manually clean up resources using:"
-        echo "  terraform destroy"
-        echo "  Or check AWS Console for orphaned resources"
+        echo -e "${RED}╔═══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║                    ROLLBACK FAILED                            ║${NC}"
+        echo -e "${RED}╠═══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${RED}║  Some resources could not be automatically cleaned up.        ║${NC}"
+        echo -e "${RED}║                                                               ║${NC}"
+        echo -e "${RED}║  Please run the cleanup script manually:                      ║${NC}"
+        echo -e "${RED}║    ./deploy/cleanup.sh --region $REGION --force               ║${NC}"
+        echo -e "${RED}║                                                               ║${NC}"
+        echo -e "${RED}║  Or check the AWS Console for orphaned resources.             ║${NC}"
+        echo -e "${RED}╚═══════════════════════════════════════════════════════════════╝${NC}"
         save_state "rollback_failed"
     fi
     
     # Clean up orphaned IAM resources that Terraform may miss
     _cleanup_orphaned_iam_resources
-    
-    # Clean build artifacts
-    rm -f tfplan 2>/dev/null
-    
-    echo ""
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  ROLLBACK COMPLETE${NC}"
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
 }
 
 # ==============================================================================
@@ -396,6 +542,12 @@ terraform_apply() {
     
     cd "$ENV_DIR"
     
+    # Run pre-flight checks to detect and fix resource conflicts
+    if ! run_preflight_checks; then
+        log "ERROR" "Pre-flight checks failed - cannot proceed with deployment"
+        return 1
+    fi
+    
     # Check for existing resources and prompt user
     if ! check_existing_resources; then
         return 1
@@ -426,13 +578,15 @@ terraform_apply() {
             echo ""
             echo "Infrastructure was created but compute instances failed to launch."
             echo "This is typically due to:"
-            echo "  - vCPU quota limits (most common for GPU instances)"
-            echo "  - IAM permission issues"
+            echo "  - Spot capacity unavailable in selected availability zones"
             echo "  - Instance type availability in the region"
+            echo "  - Auto Scaling Group launch configuration issues"
+            echo ""
+            echo "Note: vCPU quota was already verified sufficient before deployment."
             echo ""
             
             if confirm "Do you want to rollback and clean up all created resources?" "Y"; then
-                rollback_on_failure
+                rollback_on_failure "EC2/Compute Instance Creation Failed"
                 return 1
             else
                 log "WARN" "Skipping rollback - resources will remain"
@@ -446,14 +600,145 @@ terraform_apply() {
     else
         log "ERROR" "Terraform apply failed"
         echo ""
+        echo "Check the errors above or review: $LOG_FILE"
+        echo ""
+        
+        # Check if zone failover was requested (capacity error handling)
+        if [[ -f /tmp/zone_failover_requested.tmp ]] && [[ "$(cat /tmp/zone_failover_requested.tmp 2>/dev/null)" == "true" ]]; then
+            local new_zone
+            new_zone=$(cat /tmp/zone_failover_selection.tmp 2>/dev/null)
+            rm -f /tmp/zone_failover_requested.tmp /tmp/zone_failover_selection.tmp
+            
+            if [[ -n "$new_zone" ]]; then
+                echo ""
+                log "INFO" "Zone failover requested to: $new_zone"
+                
+                if _retry_with_new_zone "$new_zone"; then
+                    return 0
+                else
+                    log "ERROR" "Zone failover deployment also failed"
+                    if confirm "Do you want to rollback and clean up resources?" "Y"; then
+                        rollback_on_failure "Zone Failover Failed"
+                    fi
+                    return 1
+                fi
+            fi
+        fi
+        
+        # Clean up temp files
+        rm -f /tmp/zone_failover_requested.tmp /tmp/zone_failover_selection.tmp
         
         if confirm "Deployment failed. Do you want to rollback and clean up resources?" "Y"; then
-            rollback_on_failure
+            rollback_on_failure "Terraform Apply Failed"
         else
             log "WARN" "Skipping rollback - partial resources may remain"
             save_state "failed"
         fi
         
+        return 1
+    fi
+}
+
+# ==============================================================================
+# Retry Deployment with New Zone
+# ==============================================================================
+
+_retry_with_new_zone() {
+    local new_zone="$1"
+    local region="${REGION:-us-east-1}"
+    local tfvars_file="${ENV_DIR}/terraform.tfvars"
+    
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}  ZONE FAILOVER: Retrying with $new_zone${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Step 1: Update terraform.tfvars with new zone
+    log "INFO" "Updating availability_zones in terraform.tfvars..."
+    
+    if [[ -f "$tfvars_file" ]]; then
+        # Backup current tfvars
+        cp "$tfvars_file" "${tfvars_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # Update availability_zones
+        if grep -q "^availability_zones" "$tfvars_file"; then
+            # Replace existing
+            sed -i.bak "s/^availability_zones.*=.*/availability_zones = [\"$new_zone\"]/" "$tfvars_file"
+            rm -f "${tfvars_file}.bak"
+        else
+            # Add new
+            echo "" >> "$tfvars_file"
+            echo "# Updated by zone failover" >> "$tfvars_file"
+            echo "availability_zones = [\"$new_zone\"]" >> "$tfvars_file"
+        fi
+        
+        log "SUCCESS" "Updated availability_zones to: [\"$new_zone\"]"
+    else
+        log "ERROR" "Cannot find terraform.tfvars at: $tfvars_file"
+        return 1
+    fi
+    
+    # Step 2: Run preflight checks to see what can be reused
+    echo ""
+    log "INFO" "Running preflight checks for resource reuse..."
+    echo ""
+    
+    if type run_preflight_checks &>/dev/null; then
+        if ! run_preflight_checks; then
+            log "WARN" "Preflight checks found issues - attempting to continue..."
+        fi
+    fi
+    
+    # Step 3: Re-run terraform plan
+    echo ""
+    log "INFO" "Creating new Terraform plan for zone: $new_zone..."
+    
+    cd "$ENV_DIR"
+    
+    if ! terraform plan -out=tfplan -input=false 2>&1 | tee -a "$LOG_FILE"; then
+        log "ERROR" "Terraform plan failed for new zone"
+        return 1
+    fi
+    
+    # Step 4: Show what will change
+    echo ""
+    log "INFO" "Reviewing changes for zone failover..."
+    
+    local resource_count
+    resource_count=$(terraform show -json tfplan 2>/dev/null | grep -o '"resource_changes":\[[^]]*\]' | grep -o '"action"' | wc -l || echo "unknown")
+    
+    echo ""
+    echo -e "  ${YELLOW}Zone failover will modify resources to use: $new_zone${NC}"
+    echo ""
+    
+    if ! confirm "Proceed with zone failover deployment?" "Y"; then
+        log "INFO" "Zone failover cancelled by user"
+        return 1
+    fi
+    
+    # Step 5: Apply the new plan
+    echo ""
+    log "INFO" "Applying zone failover deployment..."
+    
+    if terraform_apply_with_progress "tfplan" "$LOG_FILE"; then
+        log "SUCCESS" "Zone failover deployment completed!"
+        
+        # Verify instances
+        if verify_compute_instances; then
+            save_state "deployed"
+            echo ""
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${GREEN}  Zone Failover Successful!${NC}"
+            echo -e "${GREEN}  Deployed to: $new_zone${NC}"
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            return 0
+        else
+            log "ERROR" "Instances failed to launch in new zone"
+            return 1
+        fi
+    else
+        log "ERROR" "Zone failover apply failed"
         return 1
     fi
 }

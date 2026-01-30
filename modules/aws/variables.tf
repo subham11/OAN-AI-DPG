@@ -28,6 +28,32 @@ variable "common_tags" {
 # ------------------------------------------------------------------------------
 # Network
 # ------------------------------------------------------------------------------
+
+# Existing VPC/Subnet Reuse Options
+variable "use_existing_vpc" {
+  description = "Use an existing VPC instead of creating a new one"
+  type        = bool
+  default     = false
+}
+
+variable "existing_vpc_id" {
+  description = "ID of existing VPC to use (only if use_existing_vpc = true)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_public_subnet_ids" {
+  description = "IDs of existing public subnets to use (only if use_existing_vpc = true)"
+  type        = list(string)
+  default     = []
+}
+
+variable "existing_private_subnet_ids" {
+  description = "IDs of existing private subnets to use (only if use_existing_vpc = true)"
+  type        = list(string)
+  default     = []
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string

@@ -141,7 +141,7 @@ resource "aws_autoscaling_group" "gpu" {
   desired_capacity          = var.asg_desired_capacity
   health_check_grace_period = var.health_check_grace_period
   health_check_type         = var.enable_load_balancer ? "ELB" : "EC2"
-  vpc_zone_identifier       = aws_subnet.private[*].id
+  vpc_zone_identifier       = local.private_subnet_ids
   target_group_arns         = var.enable_load_balancer ? [aws_lb_target_group.main[0].arn] : []
 
   launch_template {

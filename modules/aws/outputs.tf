@@ -7,22 +7,22 @@
 # ------------------------------------------------------------------------------
 output "vpc_id" {
   description = "VPC ID"
-  value       = aws_vpc.main.id
+  value       = local.vpc_id
 }
 
 output "vpc_cidr" {
   description = "VPC CIDR block"
-  value       = aws_vpc.main.cidr_block
+  value       = var.use_existing_vpc ? data.aws_vpc.existing[0].cidr_block : aws_vpc.main[0].cidr_block
 }
 
 output "public_subnet_ids" {
   description = "Public subnet IDs"
-  value       = aws_subnet.public[*].id
+  value       = local.public_subnet_ids
 }
 
 output "private_subnet_ids" {
   description = "Private subnet IDs"
-  value       = aws_subnet.private[*].id
+  value       = local.private_subnet_ids
 }
 
 # ------------------------------------------------------------------------------

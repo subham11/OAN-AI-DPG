@@ -3,10 +3,10 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Elastic IPs for NAT Gateways
+# Elastic IPs for NAT Gateways (only created if not reusing existing VPC)
 # ------------------------------------------------------------------------------
 resource "aws_eip" "nat" {
-  count  = length(var.public_subnet_cidrs)
+  count  = var.use_existing_vpc ? 0 : length(var.public_subnet_cidrs)
   domain = "vpc"
 
   tags = merge(var.common_tags, {
@@ -17,13 +17,13 @@ resource "aws_eip" "nat" {
 }
 
 # ------------------------------------------------------------------------------
-# NAT Gateways
+# NAT Gateways (only created if not reusing existing VPC)
 # ------------------------------------------------------------------------------
 resource "aws_nat_gateway" "main" {
-  count = length(var.public_subnet_cidrs)
+  count = var.use_existing_vpc ? 0 : length(var.public_subnet_cidrs)
 
   allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  subnet_id     = local.public_subnet_ids[count.index]
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-nat-${count.index + 1}"

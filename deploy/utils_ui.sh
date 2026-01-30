@@ -47,6 +47,7 @@ Options:
   --status               Show current deployment status
   --validate             Validate configuration without deploying
   --plan                 Show deployment plan without applying
+  --check-permissions    Check AWS IAM permissions before deployment
   --help                 Show this help message
 
 Examples:
@@ -54,6 +55,7 @@ Examples:
   ./deploy.sh -p aws -e staging --auto             Automated AWS deploy
   ./deploy.sh -p aws -e staging --plan             Plan only
   ./deploy.sh -p azure -e prod --destroy           Destroy Azure prod
+  ./deploy.sh --check-permissions                  Check AWS permissions
   ./deploy.sh --status
 
 Directory Structure:

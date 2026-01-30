@@ -8,7 +8,7 @@
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   # HTTP
   ingress {
@@ -48,7 +48,7 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "instance" {
   name        = "${var.name_prefix}-instance-sg"
   description = "Security group for GPU instances"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = local.vpc_id
 
   # SSH
   ingress {

@@ -17,12 +17,13 @@
 # - Non-technical user friendly
 #
 # Usage: ./deploy.sh [options]
-#   --auto          Run in automated mode with defaults
-#   --platform      Select cloud platform (aws, azure, gcp)
-#   --environment   Select environment (dev, staging, prod)
-#   --destroy       Tear down existing infrastructure
-#   --status        Check deployment status
-#   --help          Show this help message
+#   --auto              Run in automated mode with defaults
+#   --platform          Select cloud platform (aws, azure, gcp)
+#   --environment       Select environment (dev, staging, prod)
+#   --destroy           Tear down existing infrastructure
+#   --status            Check deployment status
+#   --check-permissions Check AWS IAM permissions before deployment
+#   --help              Show this help message
 # ==============================================================================
 
 set -eo pipefail
@@ -46,6 +47,8 @@ source "${DEPLOY_DIR}/prerequisites.sh"
 source "${DEPLOY_DIR}/prompts.sh"
 source "${DEPLOY_DIR}/credentials.sh"
 source "${DEPLOY_DIR}/terraform.sh"
+source "${DEPLOY_DIR}/aws_permissions.sh"
+source "${DEPLOY_DIR}/aws_quota_checker.sh"
 
 # ==============================================================================
 # Main Deployment Flow
@@ -96,6 +99,15 @@ run_interactive_deployment() {
         fi
     fi
 
+    # Step 5.5: Check AWS IAM permissions (before proceeding with deployment)
+    if [[ "$PLATFORM" == "aws" ]]; then
+        echo ""
+        if ! check_aws_permissions; then
+            # User chose to continue anyway or function returned success
+            log "WARN" "Proceeding with potentially insufficient permissions"
+        fi
+    fi
+
     # Step 6: Region selection
     select_region "$PLATFORM"
 
@@ -103,7 +115,14 @@ run_interactive_deployment() {
     select_template
 
     # Step 7.5: Instance pricing type (Spot vs On-Demand) - AWS only
-    select_instance_pricing
+    if ! select_instance_pricing; then
+        log "ERROR" "Instance pricing selection failed - quota or availability issue"
+        echo ""
+        echo "${RED}✗ Deployment aborted due to insufficient GPU quota${RESET}"
+        echo "  Please request a quota increase before attempting deployment."
+        echo ""
+        exit 1
+    fi
 
     # Step 8: Generate configuration
     generate_config "$PLATFORM" "$TEMPLATE"
@@ -166,6 +185,17 @@ run_automated_deployment() {
         exit 1
     fi
     
+    # Check AWS permissions before proceeding (automated mode)
+    if [[ "$PLATFORM" == "aws" ]]; then
+        log "STEP" "Verifying AWS IAM permissions..."
+        if ! quick_permission_check; then
+            log "ERROR" "AWS permission check failed. Run in interactive mode for details."
+            log "INFO" "Use: ./deploy.sh -p aws -e $ENVIRONMENT"
+            exit 1
+        fi
+        log "SUCCESS" "AWS permissions verified"
+    fi
+    
     terraform_init || exit 1
     terraform_validate || exit 1
     terraform_plan || exit 1
@@ -193,6 +223,7 @@ main() {
     local STATUS_MODE=false
     local VALIDATE_MODE=false
     local PLAN_MODE=false
+    local CHECK_PERMISSIONS_MODE=false
     local TEMPLATE_ARG=""
     
     while [[ $# -gt 0 ]]; do
@@ -229,6 +260,10 @@ main() {
                 PLAN_MODE=true
                 shift
                 ;;
+            --check-permissions)
+                CHECK_PERMISSIONS_MODE=true
+                shift
+                ;;
             --help|-h)
                 print_help
                 exit 0
@@ -258,7 +293,24 @@ main() {
     }
     
     # Execute based on mode
-    if [[ "$STATUS_MODE" == true ]]; then
+    if [[ "$CHECK_PERMISSIONS_MODE" == true ]]; then
+        print_banner
+        if [[ -z "$PLATFORM" ]]; then
+            PLATFORM="aws"
+        fi
+        if [[ "$PLATFORM" != "aws" ]]; then
+            log "INFO" "Permission check is currently only available for AWS"
+            exit 0
+        fi
+        log "STEP" "AWS IAM Permission Check"
+        echo ""
+        if check_aws_permissions; then
+            log "SUCCESS" "All required permissions are available!"
+            exit 0
+        else
+            exit 1
+        fi
+    elif [[ "$STATUS_MODE" == true ]]; then
         show_status
     elif [[ "$DESTROY_MODE" == true ]]; then
         print_banner

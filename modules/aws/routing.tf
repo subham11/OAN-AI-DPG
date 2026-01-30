@@ -3,14 +3,16 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Public Route Table
+# Public Route Table (only created if not reusing existing VPC)
 # ------------------------------------------------------------------------------
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+  count = var.use_existing_vpc ? 0 : 1
+
+  vpc_id = local.vpc_id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    gateway_id = local.igw_id
   }
 
   tags = merge(var.common_tags, {
@@ -19,19 +21,19 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = length(var.public_subnet_cidrs)
+  count = var.use_existing_vpc ? 0 : length(var.public_subnet_cidrs)
 
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
+  subnet_id      = local.public_subnet_ids[count.index]
+  route_table_id = aws_route_table.public[0].id
 }
 
 # ------------------------------------------------------------------------------
-# Private Route Tables
+# Private Route Tables (only created if not reusing existing VPC)
 # ------------------------------------------------------------------------------
 resource "aws_route_table" "private" {
-  count = length(var.private_subnet_cidrs)
+  count = var.use_existing_vpc ? 0 : length(var.private_subnet_cidrs)
 
-  vpc_id = aws_vpc.main.id
+  vpc_id = local.vpc_id
 
   route {
     cidr_block     = "0.0.0.0/0"
@@ -44,8 +46,8 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  count = length(var.private_subnet_cidrs)
+  count = var.use_existing_vpc ? 0 : length(var.private_subnet_cidrs)
 
-  subnet_id      = aws_subnet.private[count.index].id
+  subnet_id      = local.private_subnet_ids[count.index]
   route_table_id = aws_route_table.private[count.index].id
 }

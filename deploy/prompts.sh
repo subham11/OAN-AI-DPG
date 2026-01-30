@@ -275,6 +275,9 @@ set_template_config() {
             esac
             ;;
     esac
+    
+    # Export variables so they're available to other functions
+    export TEMPLATE INSTANCE_TYPE MACHINE_TYPE GPU_TYPE GPU_COUNT VOLUME_SIZE
 }
 
 configure_custom_instance() {
@@ -317,45 +320,31 @@ select_instance_pricing() {
     fi
     
     echo ""
-    log "STEP" "Select instance pricing type"
-    echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD}  💰 Instance Pricing Options${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "  ${GREEN}1)${NC} ${CYAN}On-Demand${NC} - Pay full price, guaranteed availability"
-    echo -e "     └─ Best for: Production workloads, predictable availability"
-    echo ""
-    echo -e "  ${GREEN}2)${NC} ${CYAN}Spot Instances${NC} - Up to 90% savings, may be interrupted"
-    echo -e "     └─ Best for: Development, testing, fault-tolerant workloads"
-    echo -e "     └─ ${YELLOW}Note: Instances may be terminated with 2-min warning${NC}"
-    echo ""
+    log "STEP" "Checking AWS quotas and selecting pricing model"
     
-    while true; do
-        read -p "Enter your choice (1-2) [1]: " choice
-        choice=${choice:-1}
-        case "$choice" in
-            1)
-                USE_SPOT_INSTANCES="false"
-                log "SUCCESS" "Selected: On-Demand instances"
-                check_vt_quota "OnDemand"
-                break
-                ;;
-            2)
-                USE_SPOT_INSTANCES="true"
-                log "SUCCESS" "Selected: Spot instances (cost savings enabled)"
-                check_vt_quota "Spot"
-                # Run spot capacity check
-                if ! check_spot_capacity; then
-                    log "WARN" "Spot capacity check indicated potential issues"
-                fi
-                break
-                ;;
-            *) echo -e "${RED}Invalid choice. Please enter 1 or 2.${NC}" ;;
-        esac
-    done
-
-# Quota check for VT (G/VT) OnDemand/Spot instance
+    # Use the intelligent quota checker to determine best option
+    if check_gpu_quotas "${REGION}" "${INSTANCE_TYPE}"; then
+        # Function sets USE_SPOT_INSTANCES and SELECTED_PRICING
+        echo ""
+        log "SUCCESS" "Pricing model auto-selected: ${SELECTED_PRICING}"
+        
+        # Update instance type if changed
+        if [[ -n "${INSTANCE_TYPE}" ]]; then
+            log "INFO" "Using instance type: ${INSTANCE_TYPE}"
+        fi
+        
+        # Run spot capacity check if spot selected
+        if [[ "$USE_SPOT_INSTANCES" == "true" ]]; then
+            if ! check_spot_capacity; then
+                log "WARN" "Spot capacity check indicated potential issues"
+            fi
+        fi
+    else
+        log "ERROR" "Unable to proceed - insufficient quotas"
+        echo ""
+        echo "${YELLOW}Please request quota increase and re-run deployment${NC}"
+        return 1
+    fi
 }
 
 check_vt_quota() {
