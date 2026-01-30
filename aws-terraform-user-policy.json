@@ -4,7 +4,9 @@
     {
       "Sid": "EC2FullAccess",
       "Effect": "Allow",
-      "Action": ["ec2:*"],
+      "Action": [
+        "ec2:*"
+      ],
       "Resource": "*"
     },
     {
@@ -14,6 +16,8 @@
         "iam:CreateRole",
         "iam:DeleteRole",
         "iam:GetRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
         "iam:TagRole",
         "iam:UntagRole",
         "iam:ListRolePolicies",
@@ -22,7 +26,8 @@
         "iam:PutRolePolicy",
         "iam:DeleteRolePolicy",
         "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy"
+        "iam:DetachRolePolicy",
+        "iam:ListRoleTags"
       ],
       "Resource": ["arn:aws:iam::*:role/dpg-infra-*"]
     },
@@ -34,10 +39,12 @@
         "iam:DeleteInstanceProfile",
         "iam:GetInstanceProfile",
         "iam:ListInstanceProfiles",
+        "iam:ListInstanceProfilesForRole",
         "iam:TagInstanceProfile",
         "iam:UntagInstanceProfile",
         "iam:AddRoleToInstanceProfile",
-        "iam:RemoveRoleFromInstanceProfile"
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:ListInstanceProfileTags"
       ],
       "Resource": ["arn:aws:iam::*:instance-profile/dpg-infra-*"]
     },
@@ -51,8 +58,12 @@
         "iam:GetPolicyVersion",
         "iam:ListPolicies",
         "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
         "iam:TagPolicy",
-        "iam:UntagPolicy"
+        "iam:UntagPolicy",
+        "iam:ListPolicyTags"
       ],
       "Resource": ["arn:aws:iam::*:policy/dpg-infra-*"]
     },
@@ -72,43 +83,134 @@
       }
     },
     {
-      "Sid": "LambdaFullAccess",
+      "Sid": "LambdaManagement",
       "Effect": "Allow",
-      "Action": ["lambda:*"],
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:InvokeFunction",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:GetPolicy",
+        "lambda:ListFunctions",
+        "lambda:ListVersionsByFunction",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:ListTags",
+        "lambda:PublishVersion"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "EventBridgeFullAccess",
+      "Sid": "EventBridgeManagement",
       "Effect": "Allow",
-      "Action": ["events:*"],
+      "Action": [
+        "events:PutRule",
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:EnableRule",
+        "events:DisableRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:ListTargetsByRule",
+        "events:ListRules",
+        "events:TagResource",
+        "events:UntagResource",
+        "events:ListTagsForResource"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "CloudWatchLogsFullAccess",
+      "Sid": "CloudWatchLogsManagement",
       "Effect": "Allow",
-      "Action": ["logs:*"],
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DescribeLogGroups",
+        "logs:CreateLogStream",
+        "logs:DeleteLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy",
+        "logs:TagLogGroup",
+        "logs:UntagLogGroup",
+        "logs:ListTagsLogGroup"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "ElasticLoadBalancingFullAccess",
+      "Sid": "ElasticLoadBalancingManagement",
       "Effect": "Allow",
-      "Action": ["elasticloadbalancing:*"],
+      "Action": [
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeLoadBalancerAttributes",
+        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:DeleteTargetGroup",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetGroupAttributes",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:DeleteListener",
+        "elasticloadbalancing:DescribeListeners",
+        "elasticloadbalancing:ModifyListener",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "elasticloadbalancing:AddTags",
+        "elasticloadbalancing:RemoveTags",
+        "elasticloadbalancing:DescribeTags"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "AutoScalingFullAccess",
+      "Sid": "AutoScalingManagement",
       "Effect": "Allow",
-      "Action": ["autoscaling:*"],
+      "Action": [
+        "autoscaling:CreateAutoScalingGroup",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:DeleteAutoScalingGroup",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "autoscaling:PutScalingPolicy",
+        "autoscaling:DeletePolicy",
+        "autoscaling:DescribePolicies",
+        "autoscaling:PutLifecycleHook",
+        "autoscaling:DeleteLifecycleHook",
+        "autoscaling:DescribeLifecycleHooks",
+        "autoscaling:CreateOrUpdateTags",
+        "autoscaling:DeleteTags",
+        "autoscaling:DescribeTags"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "CloudWatchMetrics",
+      "Sid": "CloudWatchMetricsAndAlarms",
       "Effect": "Allow",
       "Action": [
         "cloudwatch:PutMetricData",
         "cloudwatch:GetMetricData",
         "cloudwatch:GetMetricStatistics",
-        "cloudwatch:ListMetrics"
+        "cloudwatch:ListMetrics",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:DescribeAlarmsForMetric",
+        "cloudwatch:EnableAlarmActions",
+        "cloudwatch:DisableAlarmActions",
+        "cloudwatch:SetAlarmState",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource",
+        "cloudwatch:ListTagsForResource"
       ],
       "Resource": "*"
     },
@@ -118,14 +220,85 @@
       "Action": [
         "ssm:GetParameter",
         "ssm:GetParameters",
-        "ssm:PutParameter"
+        "ssm:GetParameterHistory",
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:DescribeParameters",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ServiceQuotasAccess",
+      "Effect": "Allow",
+      "Action": [
+        "servicequotas:GetServiceQuota",
+        "servicequotas:ListServiceQuotas",
+        "servicequotas:GetAWSDefaultServiceQuota",
+        "servicequotas:ListAWSDefaultServiceQuotas",
+        "servicequotas:RequestServiceQuotaIncrease",
+        "servicequotas:GetRequestedServiceQuotaChange",
+        "servicequotas:ListRequestedServiceQuotaChangeHistory"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "KMSAccess",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:CreateGrant",
+        "kms:ListAliases"
       ],
       "Resource": "*"
     },
     {
       "Sid": "STSAssumeRole",
       "Effect": "Allow",
-      "Action": ["sts:GetCallerIdentity"],
+      "Action": [
+        "sts:GetCallerIdentity",
+        "sts:GetAccessKeyInfo",
+        "sts:GetSessionToken"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ResourceGroupsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "resource-groups:CreateGroup",
+        "resource-groups:DeleteGroup",
+        "resource-groups:GetGroup",
+        "resource-groups:GetGroupQuery",
+        "resource-groups:ListGroups",
+        "resource-groups:Tag",
+        "resource-groups:Untag",
+        "resource-groups:GetTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PricingAccess",
+      "Effect": "Allow",
+      "Action": [
+        "pricing:GetProducts",
+        "pricing:DescribeServices",
+        "pricing:GetAttributeValues"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SupportAccess",
+      "Effect": "Allow",
+      "Action": [
+        "support:DescribeTrustedAdvisorChecks",
+        "support:DescribeTrustedAdvisorCheckResult"
+      ],
       "Resource": "*"
     }
   ]

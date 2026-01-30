@@ -98,6 +98,7 @@ AWS_LAMBDA_PERMISSIONS=(
     "lambda:CreateFunction"
     "lambda:DeleteFunction"
     "lambda:GetFunction"
+    "lambda:GetFunctionConfiguration"
     "lambda:UpdateFunctionCode"
     "lambda:UpdateFunctionConfiguration"
     "lambda:InvokeFunction"
@@ -105,8 +106,11 @@ AWS_LAMBDA_PERMISSIONS=(
     "lambda:RemovePermission"
     "lambda:GetPolicy"
     "lambda:ListFunctions"
+    "lambda:ListVersionsByFunction"
     "lambda:TagResource"
     "lambda:UntagResource"
+    "lambda:ListTags"
+    "lambda:PublishVersion"
 )
 
 # EventBridge/CloudWatch Events Permissions
